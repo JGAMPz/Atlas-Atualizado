@@ -1,38 +1,20 @@
 <?php
-// sair.php - SOLUÇÃO GARANTIDA
+// Pegará os cookies do usuario e resetará, fazendo com que o login do usuario desapareça e ele precise relogar
 session_start();
 
-// Destruir tudo
-$_SESSION = array();
+$_SESSION = [];
 
-// Destruir cookie de sessão
-if (ini_get("session.use_cookies")) {
-    $params = session_get_cookie_params();
-    setcookie(session_name(), '', time() - 42000,
-        $params["path"], $params["domain"],
-        $params["secure"], $params["httponly"]
-    );
+if (isset($_COOKIE[session_name()])) {
+    setcookie(session_name(), '', time() - 3600, '/');
 }
 
-// Destruir sessão
 session_destroy();
 
-// JavaScript para garantir o redirecionamento
-echo "
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Saindo...</title>
-    <link href=\"https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css\" rel=\"stylesheet\">
-</head>
-<body class=\"bg-dark text-white\">
-    <script>
-        setTimeout(function() {
-            window.location.href = 'login.php';
-        }, 2000);
-    </script>
-</body>
-</html>
-";
+header("Cache-Control: no-cache, no-store, must-revalidate");
+header("Pragma: no-cache");
+header("Expires: 0");
+
+// Redirecionar para o login
+header("Location: http://" . $_SERVER['HTTP_HOST'] . "/portal-academia/login.php");
 exit;
 ?>

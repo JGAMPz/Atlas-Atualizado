@@ -7,6 +7,70 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 /**
+ * Valida data de nascimento
+ */
+function validarDataNascimento(dataNascimento) {
+    const nascimento = new Date(dataNascimento);
+    const hoje = new Date();
+    const idade = hoje.getFullYear() - nascimento.getFullYear();
+    
+    // Ajuste para o mês/dia
+    const mesAtual = hoje.getMonth();
+    const diaAtual = hoje.getDate();
+    const mesNascimento = nascimento.getMonth();
+    const diaNascimento = nascimento.getDate();
+    
+    let idadeCorrigida = idade;
+    
+    if (mesAtual < mesNascimento || (mesAtual === mesNascimento && diaAtual < diaNascimento)) {
+        idadeCorrigida--;
+    }
+    
+    return {
+        valida: idadeCorrigida >= 1 && idadeCorrigida <= 120,
+        idade: idadeCorrigida,
+        mensagem: idadeCorrigida < 1 ? 
+            'Você deve ter pelo menos 1 ano de idade' : 
+            'Idade máxima permitida é 120 anos'
+    };
+}
+
+/**
+ * Adiciona validação em tempo real para data de nascimento
+ */
+function inicializarValidacaoDataNascimento() {
+    const dataNascimentoInput = document.getElementById('data_nascimento');
+    
+    if (dataNascimentoInput) {
+        // Validação em tempo real
+        dataNascimentoInput.addEventListener('change', function() {
+            const validacao = validarDataNascimento(this.value);
+            
+            if (!validacao.valida) {
+                this.setCustomValidity(validacao.mensagem);
+                this.reportValidity();
+            } else {
+                this.setCustomValidity('');
+            }
+        });
+        
+        // Também validar no submit do formulário
+        const form = dataNascimentoInput.closest('form');
+        if (form) {
+            form.addEventListener('submit', function(e) {
+                const validacao = validarDataNascimento(dataNascimentoInput.value);
+                
+                if (!validacao.valida) {
+                    e.preventDefault();
+                    alert(validacao.mensagem);
+                    dataNascimentoInput.focus();
+                }
+            });
+        }
+    }
+}
+
+/**
  * Inicializa funcionalidades do sistema
  */
 function initializeSystem() {

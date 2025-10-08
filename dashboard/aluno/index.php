@@ -10,12 +10,12 @@ $stmt = $pdo->prepare("
     SELECT m.*, p.nome as plano_nome, p.inclui_personal 
     FROM matriculas m 
     LEFT JOIN planos p ON m.plano_id = p.id 
-    WHERE m.aluno_id = ? AND m.status = 'ativa'
+    WHERE m.user_id = ? AND m.status = 'ativa'
 ");
 $stmt->execute([$usuario['id']]);
 $matricula = $stmt->fetch();
 
-// Buscar próximos agendamentos
+// Buscar proximos agendamentos
 $stmt = $pdo->prepare("
     SELECT a.*, u.nome as personal_nome 
     FROM agenda a 

@@ -9,7 +9,7 @@ ini_set('display_errors', 1);
 
 // Configurações do banco de dados
 define('DB_HOST', 'localhost');
-define('DB_NAME', 'atlas_tcc');
+define('DB_NAME', 'portal_academia');
 define('DB_USER', 'root');
 define('DB_PASS', '');
 define('DB_CHARSET', 'utf8mb4');
@@ -69,6 +69,33 @@ try {
 // =============================================
 // FUNÇÕES GLOBAIS DE CONFIGURAÇÃO
 // =============================================
+
+// Valida data de nascimento (idade entre 1 e 120 anos)
+ 
+function validarDataNascimento($dataNascimento) {
+    if (empty($dataNascimento)) {
+        return ['valido' => false, 'mensagem' => 'Data de nascimento é obrigatória'];
+    }
+    
+    $nascimento = new DateTime($dataNascimento);
+    $hoje = new DateTime();
+    $idade = $hoje->diff($nascimento)->y;
+    
+    if ($idade < 1) {
+        return ['valido' => false, 'mensagem' => 'Você deve ter pelo menos 1 ano de idade'];
+    }
+    
+    if ($idade > 120) {
+        return ['valido' => false, 'mensagem' => 'iabalabadu'];
+    }
+    
+    // Verificar se a data não é futura
+    if ($nascimento > $hoje) {
+        return ['valido' => false, 'mensagem' => 'Data de nascimento não pode ser futura'];
+    }
+    
+    return ['valido' => true, 'idade' => $idade];
+}
 
 /**
  * Inicializa a sessão com configurações de segurança

@@ -106,13 +106,19 @@ function processCadastro($data) {
     $data_nascimento = $data['data_nascimento'];
     $endereco = sanitizeInput($data['endereco']);
     
-    // Validações
+    // Validações básicas
     if ($senha !== $confirmar_senha) {
         return ['success' => false, 'message' => 'As senhas não coincidem'];
     }
     
     if (!isValidEmail($email)) {
         return ['success' => false, 'message' => 'E-mail inválido'];
+    }
+    
+    // VALIDAÇÃO DA DATA DE NASCIMENTO
+    $validacaoData = validarDataNascimento($data_nascimento);
+    if (!$validacaoData['valido']) {
+        return ['success' => false, 'message' => $validacaoData['mensagem']];
     }
     
     // Verificar se email já existe

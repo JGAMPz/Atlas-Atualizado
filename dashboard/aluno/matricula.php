@@ -7,15 +7,15 @@ $usuario = getUsuarioInfo();
 
 // Buscar matrícula do aluno
 $stmt = $pdo->prepare("
-    SELECT m.*, p.nome as plano_nome, p.preco, u.nome as personal_nome 
+    SELECT m.*, p.nome as plano_nome, p.preco, NULL as personal_nome
     FROM matriculas m 
     LEFT JOIN planos p ON m.plano_id = p.id 
-    LEFT JOIN usuarios u ON m.personal_id = u.id 
-    WHERE m.aluno_id = ?
+    WHERE m.user_id = ?
     ORDER BY m.data_inicio DESC
 ");
 $stmt->execute([$usuario['id']]);
 $matriculas = $stmt->fetchAll();
+
 ?>
  <?php 
 $page_title = "Minha Matrícula - Aluno";

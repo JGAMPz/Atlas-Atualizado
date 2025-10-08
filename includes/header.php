@@ -70,10 +70,10 @@ $usuario = getUsuarioInfo();
                                 <hr class="dropdown-divider">
                             </li>
                             <li>
-                                <a class="dropdown-item text-danger" href="/maluco/portal-academia/logout.php">
-                                    <i class="fas fa-sign-out-alt me-2"></i>Sair
-                                </a>
-                            </li>
+    <a class="dropdown-item text-danger" href="/portal-academia/logout.php">
+        <i class="fas fa-sign-out-alt me-2"></i>Sair
+    </a>
+</li>
                         </ul>
                     </li>
                 </ul>
