@@ -1,8 +1,6 @@
- -- DROP/CREATE DATABASE conforme preferir:
 CREATE DATABASE IF NOT EXISTS portal_academia CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE portal_academia;
 
--- Tabela de usuários (correções + role)
 CREATE TABLE usuarios (
     id INT PRIMARY KEY AUTO_INCREMENT,
     nome VARCHAR(80) NOT NULL,
@@ -29,7 +27,7 @@ CREATE TABLE planos (
     status ENUM('ativo','inativo') DEFAULT 'ativo'
 );
 
--- Tabela de matriculas (associação aluno -> plano)
+-- Tabela de matriculas
 CREATE TABLE matriculas (
     id INT PRIMARY KEY AUTO_INCREMENT,
     user_id INT NOT NULL,
@@ -54,7 +52,7 @@ CREATE TABLE agenda (
     FOREIGN KEY (aluno_id) REFERENCES usuarios(id) ON DELETE SET NULL
 );
 
--- Tabela de pagamentos (referência à matrícula)
+-- Tabela de pagamentos
 CREATE TABLE pagamentos (
     id INT PRIMARY KEY AUTO_INCREMENT,
     user_id INT NOT NULL,
@@ -67,7 +65,6 @@ CREATE TABLE pagamentos (
     FOREIGN KEY (matricula_id) REFERENCES matriculas(id) ON DELETE SET NULL
 );
 
--- Índices úteis
 CREATE INDEX idx_usuarios_tipo ON usuarios(tipo);
 CREATE INDEX idx_agenda_personal ON agenda(personal_id);
 

@@ -86,7 +86,7 @@ function validarDataNascimento($dataNascimento) {
     }
     
     if ($idade > 120) {
-        return ['valido' => false, 'mensagem' => 'iabalabadu'];
+        return ['valido' => false, 'mensagem' => 'Idade máxima permitida é 120 anos'];
     }
     
     // Verificar se a data não é futura
@@ -97,9 +97,8 @@ function validarDataNascimento($dataNascimento) {
     return ['valido' => true, 'idade' => $idade];
 }
 
-/**
- * Inicializa a sessão com configurações de segurança
- */
+// Inicializa a sessão com configurações de segurança
+ 
 function initSession() {
     session_name(SESSION_NAME);
     session_set_cookie_params([
@@ -122,31 +121,27 @@ function initSession() {
     }
 }
 
-/**
- * Verifica se a requisição é AJAX
- */
+// Verifica se a requisição é AJAX
+
 function isAjaxRequest() {
     return !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && 
            strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest';
 }
 
-/**
- * Retorna a URL absoluta do sistema
- */
+// Retorna a URL absoluta do sistema
+
 function getBaseUrl() {
     return SITE_URL;
 }
 
-/**
- * Retorna o caminho absoluto do sistema
- */
+// Retorna o caminho absoluto do sistema
+
 function getBasePath() {
     return SITE_PATH;
 }
 
-/**
- * Sanitiza dados de entrada
- */
+// Sanitiza dados de entrada
+
 function sanitizeInput($data) {
     if (is_array($data)) {
         return array_map('sanitizeInput', $data);
@@ -155,24 +150,21 @@ function sanitizeInput($data) {
     return htmlspecialchars(trim($data), ENT_QUOTES, 'UTF-8');
 }
 
-/**
- * Valida formato de email
- */
+// Valida formato de email
+
 function isValidEmail($email) {
     return filter_var($email, FILTER_VALIDATE_EMAIL) !== false;
 }
 
-/**
- * Valida formato de telefone brasileiro
- */
+// Valida formato de telefone brasileiro
+
 function isValidPhone($phone) {
     $phone = preg_replace('/[^0-9]/', '', $phone);
     return strlen($phone) >= 10 && strlen($phone) <= 11;
 }
 
-/**
- * Gera token CSRF
- */
+// Gera token CSRF
+
 function generateCsrfToken() {
     if (empty($_SESSION['csrf_token'])) {
         $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
@@ -180,17 +172,15 @@ function generateCsrfToken() {
     return $_SESSION['csrf_token'];
 }
 
-/**
- * Verifica token CSRF
- */
+// Verifica token CSRF
+ 
 function verifyCsrfToken($token) {
     return isset($_SESSION['csrf_token']) && 
            hash_equals($_SESSION['csrf_token'], $token);
 }
 
-/**
- * Redireciona para uma URL
- */
+// Redireciona para uma URL
+
 function redirect($url, $permanent = false) {
     if ($permanent) {
         header('HTTP/1.1 301 Moved Permanently');
@@ -199,32 +189,28 @@ function redirect($url, $permanent = false) {
     exit();
 }
 
-/**
- * Formata valor monetário
- */
+// Formata valor monetário
+
 function formatCurrency($value) {
     return 'R$ ' . number_format($value, 2, ',', '.');
 }
 
-/**
- * Formata data para exibição
- */
+//  Formata data para exibição
+
 function formatDate($date, $format = 'd/m/Y') {
     if (empty($date)) return '';
     return date($format, strtotime($date));
 }
 
-/**
- * Formata data e hora para exibição
- */
+// Formata data e hora para exibição
+ 
 function formatDateTime($datetime, $format = 'd/m/Y H:i') {
     if (empty($datetime)) return '';
     return date($format, strtotime($datetime));
 }
 
-/**
- * Calcula idade a partir da data de nascimento
- */
+// Calcula idade a partir da data de nascimento
+
 function calculateAge($birthdate) {
     $birth = new DateTime($birthdate);
     $today = new DateTime();
@@ -232,9 +218,8 @@ function calculateAge($birthdate) {
     return $age->y;
 }
 
-/**
- * Log de atividades do sistema
- */
+// Log de atividades do sistema
+
 function logActivity($usuario_id, $acao, $detalhes = '') {
     global $pdo;
     
