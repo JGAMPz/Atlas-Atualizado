@@ -9,7 +9,7 @@ ini_set('display_errors', 1);
 
 // Configurações do banco de dados
 define('DB_HOST', 'localhost');
-define('DB_NAME', 'portal_academia');
+define('DB_NAME', 'atlas_tcc');
 define('DB_USER', 'root');
 define('DB_PASS', '');
 define('DB_CHARSET', 'utf8mb4');
@@ -19,6 +19,7 @@ define('SITE_NAME', 'ATLAS');
 define('SITE_URL', 'http://localhost/portal-academia');
 define('SITE_PATH', __DIR__ . '/..');
 define('UPLOAD_PATH', SITE_PATH . '/assets/uploads');
+define('BASE_URL', 'http://localhost/maluco/Atlas-Atualizado');
 
 // Configurações de sessão
 define('SESSION_TIMEOUT', 3600); // 1 hora em segundos

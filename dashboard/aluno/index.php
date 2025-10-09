@@ -10,7 +10,7 @@ $stmt = $pdo->prepare("
     SELECT m.*, p.nome as plano_nome, p.inclui_personal 
     FROM matriculas m 
     LEFT JOIN planos p ON m.plano_id = p.id 
-    WHERE m.user_id = ? AND m.status = 'ativa'
+    WHERE m.id = ? AND m.status = 'ativa'
 ");
 $stmt->execute([$usuario['id']]);
 $matricula = $stmt->fetch();

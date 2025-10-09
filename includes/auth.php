@@ -28,4 +28,37 @@ function getUsuarioInfo() {
     }
     return null;
 }
+/**
+ * Verifica se o usuário tem permissão para acessar a página atual
+ */
+function verificarAcessoPagina($tipoRequerido = null) {
+    if (!isset($_SESSION['usuario_id'])) {
+        header('Location: ' . BASE_URL . '/login.php');
+        exit;
+    }
+    
+    // Se foi especificado um tipo requerido, verifica
+    if ($tipoRequerido && $_SESSION['usuario_tipo'] !== $tipoRequerido) {
+        // Redireciona para o dashboard correto do usuário
+        header('Location: ' . BASE_URL . '/dashboard/' . $_SESSION['usuario_tipo'] . '/index.php');
+        exit;
+    }
+}
+
+/**
+ * Verifica se o usuário é administrador
+ */
+function isAdmin() {
+    return isset($_SESSION['usuario_tipo']) && $_SESSION['usuario_tipo'] === 'admin';
+}
+
+/**
+ * Redireciona se não for admin
+ */
+function requireAdmin() {
+    if (!isAdmin()) {
+        header('Location: ' . BASE_URL . '/dashboard/' . $_SESSION['usuario_tipo'] . '/index.php');
+        exit;
+    }
+}
 ?>

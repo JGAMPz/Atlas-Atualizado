@@ -91,12 +91,60 @@ include '../../includes/header.php';
              </div>
          </div>
      </div>
-     <div class="col-md-2 mb-3">
-         <div class="card text-center">
+     <?php
+// Buscar dados para relatórios - VERSÃO SEGURA
+try {
+    // Receita Total
+    $stmt = $pdo->query("SELECT COALESCE(SUM(valor), 0) as receita_total FROM pagamentos WHERE status = 'pago'");
+    $result = $stmt->fetch();
+    $receita_total = $result['receita_total'] ?? 0;
+
+    // Receita do Mês Atual
+    $stmt = $pdo->prepare("
+        SELECT COALESCE(SUM(valor), 0) as receita_mes 
+        FROM pagamentos 
+        WHERE status = 'pago' 
+        AND MONTH(data_pagamento) = MONTH(CURRENT_DATE()) 
+        AND YEAR(data_pagamento) = YEAR(CURRENT_DATE())
+    ");
+    $stmt->execute();
+    $result = $stmt->fetch();
+    $receita_mes = $result['receita_mes'] ?? 0;
+
+    // Média de Receita Mensal
+    $stmt = $pdo->query("
+        SELECT COALESCE(AVG(valor), 0) as media_mensal 
+        FROM pagamentos 
+        WHERE status = 'pago'
+    ");
+    $result = $stmt->fetch();
+    $media_mensal = $result['media_mensal'] ?? 0;
+
+} catch (PDOException $e) {
+    // Valores padrão em caso de erro
+    $receita_total = 0;
+    $receita_mes = 0;
+    $media_mensal = 0;
+    error_log("Erro ao buscar relatórios: " . $e->getMessage());
+}
+?>
+
+     <!-- Receita Total -->
+     <div class="col-md-4 mb-4">
+         <div class="card">
              <div class="card-body">
-                 <h3 class="text-danger">R$ <?php echo number_format($estatisticas['receita_total'], 2, ',', '.'); ?>
-                 </h3>
-                 <p class="card-text">Receita Total</p>
+                 <div class="d-flex justify-content-between">
+                     <div>
+                         <h5 class="card-title">Receita Total</h5>
+                         <p class="card-text h4 text-success">
+                             R$ <?php echo number_format($receita_total, 2, ',', '.'); ?>
+                         </p>
+                     </div>
+                     <div class="align-self-center">
+                         <i class="fas fa-money-bill-wave fa-2x text-success"></i>
+                     </div>
+                 </div>
+                 <small class="text-muted">Todos os pagamentos confirmados</small>
              </div>
          </div>
      </div>

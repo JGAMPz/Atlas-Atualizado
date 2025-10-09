@@ -56,13 +56,30 @@ $usuario = getUsuarioInfo();
                     <li class="nav-item">
                         <a class="nav-link" href="relatorios.php">Relatórios</a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="gerenciar_usuarios.php">Gerenciar Usuários</a>
+                    </li>
                     <?php endif; ?>
                 </ul>
 
                 <ul class="navbar-nav">
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-                            <i class="fas fa-user me-1"></i> <?php echo $usuario['nome']; ?>
+                            <i class="fas fa-user me-1"></i>
+                            <?php echo $usuario['nome']; ?>
+                            <small class="text-muted">
+                                (<?php 
+                                // Mostra o tipo de usuário de forma segura
+                                if (isset($usuario['tipo'])) {
+                                    switch($usuario['tipo']) {
+                                        case 'admin': echo 'Administrador'; break;
+                                        case 'personal': echo 'Personal Trainer'; break;
+                                        case 'aluno': echo 'Aluno'; break;
+                                        default: echo 'Usuário';
+                                    }
+                                }
+                                ?>)
+                            </small>
                         </a>
                         <ul class="dropdown-menu">
                             <li><a class="dropdown-item" href="#"><i class="fas fa-cog me-2"></i>Configurações</a></li>
@@ -70,10 +87,10 @@ $usuario = getUsuarioInfo();
                                 <hr class="dropdown-divider">
                             </li>
                             <li>
-    <a class="dropdown-item text-danger" href="/portal-academia/logout.php">
-        <i class="fas fa-sign-out-alt me-2"></i>Sair
-    </a>
-</li>
+                                <a class="dropdown-item text-danger" href="<?php echo BASE_URL; ?>/logout.php">
+                                    <i class="fas fa-sign-out-alt me-2"></i>Sair
+                                </a>
+                            </li>
                         </ul>
                     </li>
                 </ul>

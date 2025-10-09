@@ -1,5 +1,5 @@
-CREATE DATABASE IF NOT EXISTS portal_academia CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE portal_academia;
+CREATE DATABASE IF NOT EXISTS atlas_tcc CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE atlas_tcc;
 
 CREATE TABLE usuarios (
     id INT PRIMARY KEY AUTO_INCREMENT,

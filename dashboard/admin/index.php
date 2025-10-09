@@ -89,12 +89,22 @@ include '../../includes/header.php';
         </div>
     </div>
 
-    <div class="col-md-2 mb-4">
-        <div class="card dashboard-card info">
-            <div class="card-body text-center">
-                <h3 class="text-info">R$ <?php echo number_format($estatisticas['receita_mensal'], 2, ',', '.'); ?></h3>
-                <p class="card-text">Receita Mensal</p>
-                <i class="fas fa-chart-line fa-2x text-info"></i>
+    <!-- Receita Mensal -->
+    <div class="col-md-3 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5 class="card-title">Receita Mensal</h5>
+                        <p class="card-text h4">
+                            R$ <?php echo number_format(($receita_mensal ?? 0), 2, ',', '.'); ?>
+                        </p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-money-bill-wave fa-2x text-success"></i>
+                    </div>
+                </div>
+                <small class="text-muted"><?php echo date('F Y'); ?></small>
             </div>
         </div>
     </div>

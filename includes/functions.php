@@ -1,4 +1,4 @@
- <?php
+<?php
 require_once 'config.php';
 
 /**
@@ -47,18 +47,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 }
 
 /**
- * Processa login do usuário
+ * Processa login do usuário com detecção automática do tipo
  */
 function processLogin($data) {
     global $pdo;
     
     $email = sanitizeInput($data['email']);
     $senha = $data['senha'];
-    $tipo_usuario = $data['tipo_usuario'];
     
-    // Buscar usuário
-    $stmt = $pdo->prepare("SELECT * FROM usuarios WHERE email = ? AND tipo = ? AND status = 'ativo'");
-    $stmt->execute([$email, $tipo_usuario]);
+    // Buscar usuário (SEM filtrar por tipo - busca em todos os tipos)
+    $stmt = $pdo->prepare("SELECT * FROM usuarios WHERE email = ? AND status = 'ativo'");
+    $stmt->execute([$email]);
     $usuario = $stmt->fetch();
     
     if (!$usuario) {
@@ -75,20 +74,35 @@ function processLogin($data) {
         session_start();
     }
     
-    // Criar sessão
+    // Criar sessão com dados do usuário
     $_SESSION['usuario_id'] = $usuario['id'];
     $_SESSION['usuario_nome'] = $usuario['nome'];
     $_SESSION['usuario_email'] = $usuario['email'];
     $_SESSION['usuario_tipo'] = $usuario['tipo'];
+    $_SESSION['usuario_tipo_nome'] = getTipoUsuarioNome($usuario['tipo']);
     
     // Log de atividade
-    logActivity($usuario['id'], 'login', 'Login no sistema');
+    logActivity($usuario['id'], 'login', 'Login no sistema como ' . $usuario['tipo']);
     
     return [
         'success' => true, 
-        'message' => 'Login realizado com sucesso',
-        'redirect' => 'dashboard/' . $usuario['tipo'] . '/index.php'
+        'message' => 'Login realizado com sucesso!',
+        'redirect' => 'dashboard/' . $usuario['tipo'] . '/index.php',
+        'tipo_usuario' => $usuario['tipo']
     ];
+}
+
+/**
+ * Retorna o nome amigável do tipo de usuário
+ */
+function getTipoUsuarioNome($tipo) {
+    $tipos = [
+        'aluno' => 'Aluno',
+        'personal' => 'Personal Trainer',
+        'admin' => 'Administrador'
+    ];
+    
+    return $tipos[$tipo] ?? 'Usuário';
 }
 
 /**
@@ -313,5 +327,83 @@ function criarHorariosDisponiveis($personal_id, $data, $horarios) {
     }
     
     return true;
+}
+
+/**
+ * Altera o tipo de um usuário com proteção do Super Admin (usando is_super_admin)
+ */
+function alterarTipoUsuario($usuario_id, $novo_tipo, $admin_id) {
+    global $pdo;
+    
+    try {
+        // Verificar se quem está alterando é admin
+        $stmt = $pdo->prepare("SELECT tipo, is_super_admin FROM usuarios WHERE id = ?");
+        $stmt->execute([$admin_id]);
+        $admin = $stmt->fetch();
+        
+        if (!$admin || $admin['tipo'] !== 'admin') {
+            return ['success' => false, 'message' => 'Apenas administradores podem alterar tipos de usuário.'];
+        }
+        
+        // Impedir que o admin altere a si mesmo
+        if ($usuario_id == $admin_id) {
+            return ['success' => false, 'message' => 'Você não pode alterar seu próprio tipo.'];
+        }
+        
+        // Verificar se o usuário alvo é Super Admin
+        $stmt = $pdo->prepare("SELECT id, nome, tipo, is_super_admin FROM usuarios WHERE id = ?");
+        $stmt->execute([$usuario_id]);
+        $usuario = $stmt->fetch();
+        
+        if (!$usuario) {
+            return ['success' => false, 'message' => 'Usuário não encontrado.'];
+        }
+        
+        // Proteger o Super Admin de ser rebaixado
+        if ($usuario['is_super_admin'] == 1 && $novo_tipo !== 'admin') {
+            return ['success' => false, 'message' => 'Não é possível rebaixar o administrador principal do sistema.'];
+        }
+        
+        // Verificar se o tipo é válido
+        $tipos_validos = ['aluno', 'personal', 'admin'];
+        if (!in_array($novo_tipo, $tipos_validos)) {
+            return ['success' => false, 'message' => 'Tipo de usuário inválido.'];
+        }
+        
+        // Verificar se já é do tipo desejado
+        if ($usuario['tipo'] === $novo_tipo) {
+            return ['success' => false, 'message' => "Este usuário já é " . getTipoUsuarioNome($novo_tipo) . "."];
+        }
+        
+        // Apenas o Super Admin pode rebaixar outros administradores
+        $is_current_user_super_admin = ($admin['is_super_admin'] == 1);
+        
+        if ($usuario['tipo'] === 'admin' && $novo_tipo !== 'admin' && !$is_current_user_super_admin) {
+            return ['success' => false, 'message' => 'Apenas o administrador principal pode rebaixar outros administradores.'];
+        }
+        
+        // Alterar tipo
+        $stmt = $pdo->prepare("UPDATE usuarios SET tipo = ? WHERE id = ?");
+        $stmt->execute([$novo_tipo, $usuario_id]);
+        
+        // Log da ação
+        $tipos_nomes = [
+            'aluno' => 'aluno',
+            'personal' => 'personal trainer', 
+            'admin' => 'administrador'
+        ];
+        
+        logActivity($admin_id, 'alteracao_tipo', 
+            "Alterou {$usuario['nome']} de {$tipos_nomes[$usuario['tipo']]} para {$tipos_nomes[$novo_tipo]}");
+        
+        return [
+            'success' => true, 
+            'message' => "{$usuario['nome']} foi alterado para " . getTipoUsuarioNome($novo_tipo) . " com sucesso!"
+        ];
+        
+    } catch (PDOException $e) {
+        error_log("Erro ao alterar tipo de usuário: " . $e->getMessage());
+        return ['success' => false, 'message' => 'Erro ao alterar tipo de usuário.'];
+    }
 }
 ?>
