@@ -11,11 +11,16 @@ $stmt = $pdo->query("
         (SELECT COUNT(*) FROM usuarios WHERE tipo = 'aluno' AND status = 'ativo') as total_alunos,
         (SELECT COUNT(*) FROM usuarios WHERE tipo = 'personal' AND status = 'ativo') as total_personais,
         (SELECT COUNT(*) FROM matriculas WHERE status = 'ativa') as matriculas_ativas,
-        (SELECT SUM(valor_contratado) FROM matriculas WHERE status = 'ativa' AND MONTH(data_criacao) = MONTH(CURRENT_DATE())) as receita_mensal,
+        (SELECT SUM(p.preco)  -- Usando a coluna 'preco' da tabela 'planos'
+         FROM matriculas m
+         JOIN planos p ON m.plano_id = p.id
+         WHERE m.status = 'ativa' 
+           AND MONTH(m.data_inicio) = MONTH(CURRENT_DATE())) as receita_mensal,
         (SELECT COUNT(*) FROM agenda WHERE DATE(data_hora) = CURDATE() AND status = 'agendado') as aulas_hoje,
         (SELECT COUNT(*) FROM usuarios WHERE DATE(data_cadastro) = CURDATE()) as novos_cadastros
 ");
 $estatisticas = $stmt->fetch();
+
 
 // Últimos cadastros
 $stmt = $pdo->query("
