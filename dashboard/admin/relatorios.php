@@ -1,302 +1,483 @@
- <?php
+<?php
 require_once '../../includes/auth.php';
 require_once '../../includes/config.php';
+require_once '../../includes/functions.php';
 verificarTipo('admin');
 
-$stmt = $pdo->query("
-    SELECT 
-        COUNT(*) as total_usuarios,
-        SUM(CASE WHEN tipo = 'aluno' THEN 1 ELSE 0 END) as total_alunos,
-        SUM(CASE WHEN tipo = 'personal' THEN 1 ELSE 0 END) as total_personais,
-        (SELECT COUNT(*) FROM matriculas WHERE status = 'ativa') as matriculas_ativas,
-        (SELECT COUNT(*) FROM agenda WHERE status = 'agendado') as aulas_agendadas
-    FROM usuarios
-    WHERE status = 'ativo'
-");
-$estatisticas = $stmt->fetch();
+$usuario = getUsuarioInfo();
 
-$stmt = $pdo->query("
-    SELECT 
-        DATE_FORMAT(data_inicio, '%Y-%m') as mes,
-        COUNT(*) as matriculas,
-        (SELECT COALESCE(SUM(p.valor), 0) 
-         FROM pagamentos p 
-         INNER JOIN matriculas m ON p.user_id = m.user_id 
-         WHERE p.status = 'pago' 
-         AND DATE_FORMAT(p.data_pagamento, '%Y-%m') = DATE_FORMAT(matriculas.data_inicio, '%Y-%m')
-        ) as receita
-    FROM matriculas 
-    WHERE data_inicio >= DATE_SUB(CURRENT_DATE, INTERVAL 6 MONTH)
-    GROUP BY DATE_FORMAT(data_inicio, '%Y-%m')
-    ORDER BY mes
-");
-$receita_mensal = $stmt->fetchAll();
-// Novos usuários (últimos 30 dias)
-$stmt = $pdo->query("
-    SELECT 
-        DATE(data_cadastro) as data,
-        COUNT(*) as novos_usuarios,
-        SUM(CASE WHEN tipo = 'aluno' THEN 1 ELSE 0 END) as novos_alunos
-    FROM usuarios 
-    WHERE data_cadastro >= DATE_SUB(CURRENT_DATE, INTERVAL 30 DAY)
-    GROUP BY DATE(data_cadastro)
-    ORDER BY data
-");
-$novos_usuarios = $stmt->fetchAll();
-?>
- <?php 
-$page_title = "Relatórios - Admin";
-include '../../includes/header.php'; 
-?>
-
- <div class="d-flex justify-content-between align-items-center mb-4">
-     <h2>Relatórios e Estatísticas</h2>
-     <div>
-         <button class="btn btn-success" onclick="exportarRelatorio()">
-             <i class="fas fa-download"></i> Exportar Relatório
-         </button>
-     </div>
- </div>
-
- <!-- Cards de Resumo -->
- <div class="row mb-4">
-     <div class="col-md-2 mb-3">
-         <div class="card text-center">
-             <div class="card-body">
-                 <h3 class="text-primary"><?php echo $estatisticas['total_usuarios']; ?></h3>
-                 <p class="card-text">Total Usuários</p>
-             </div>
-         </div>
-     </div>
-     <div class="col-md-2 mb-3">
-         <div class="card text-center">
-             <div class="card-body">
-                 <h3 class="text-success"><?php echo $estatisticas['total_alunos']; ?></h3>
-                 <p class="card-text">Alunos</p>
-             </div>
-         </div>
-     </div>
-     <div class="col-md-2 mb-3">
-         <div class="card text-center">
-             <div class="card-body">
-                 <h3 class="text-warning"><?php echo $estatisticas['total_personais']; ?></h3>
-                 <p class="card-text">Personais</p>
-             </div>
-         </div>
-     </div>
-     <div class="col-md-2 mb-3">
-         <div class="card text-center">
-             <div class="card-body">
-                 <h3 class="text-info"><?php echo $estatisticas['matriculas_ativas']; ?></h3>
-                 <p class="card-text">Matrículas Ativas</p>
-             </div>
-         </div>
-     </div>
-     <?php
-// Buscar dados para relatórios - VERSÃO SEGURA
+// Buscar dados para relatórios
 try {
-    // Receita Total
-    $stmt = $pdo->query("SELECT COALESCE(SUM(valor), 0) as receita_total FROM pagamentos WHERE status = 'pago'");
-    $result = $stmt->fetch();
-    $receita_total = $result['receita_total'] ?? 0;
-
-    // Receita do Mês Atual
-    $stmt = $pdo->prepare("
-        SELECT COALESCE(SUM(valor), 0) as receita_mes 
-        FROM pagamentos 
-        WHERE status = 'pago' 
-        AND MONTH(data_pagamento) = MONTH(CURRENT_DATE()) 
-        AND YEAR(data_pagamento) = YEAR(CURRENT_DATE())
-    ");
-    $stmt->execute();
-    $result = $stmt->fetch();
-    $receita_mes = $result['receita_mes'] ?? 0;
-
-    // Média de Receita Mensal
+    // Total de usuários por tipo
     $stmt = $pdo->query("
-        SELECT COALESCE(AVG(valor), 0) as media_mensal 
-        FROM pagamentos 
-        WHERE status = 'pago'
+        SELECT 
+            tipo,
+            COUNT(*) as total,
+            SUM(CASE WHEN status = 'ativo' THEN 1 ELSE 0 END) as ativos
+        FROM usuarios 
+        GROUP BY tipo
     ");
-    $result = $stmt->fetch();
-    $media_mensal = $result['media_mensal'] ?? 0;
+    $usuarios_por_tipo = $stmt->fetchAll();
+
+    // Total de planos
+    $stmt = $pdo->query("
+        SELECT 
+            COUNT(*) as total_planos,
+            SUM(CASE WHEN status = 'ativo' THEN 1 ELSE 0 END) as planos_ativos
+        FROM planos
+    ");
+    $planos_info = $stmt->fetch();
+
+    // Matrículas ativas
+    $stmt = $pdo->query("
+        SELECT COUNT(*) as total_matriculas 
+        FROM matriculas 
+        WHERE status = 'ativa'
+    ");
+    $matriculas_ativas = $stmt->fetchColumn();
+
+    // Pagamentos recentes (usando data_inicio como referência)
+    $stmt = $pdo->query("
+        SELECT 
+            COUNT(*) as total_pagamentos,
+            COALESCE(SUM(p.valor), 0) as valor_total
+        FROM pagamentos p
+        WHERE p.status = 'pago'
+    ");
+    $pagamentos_info = $stmt->fetch();
+
+    // Agendamentos do mês
+    $stmt = $pdo->query("
+        SELECT COUNT(*) as total_agendamentos
+        FROM agenda 
+        WHERE status = 'agendado' 
+        AND MONTH(data_hora) = MONTH(CURRENT_DATE())
+        AND YEAR(data_hora) = YEAR(CURRENT_DATE())
+    ");
+    $agendamentos_mes = $stmt->fetchColumn();
 
 } catch (PDOException $e) {
-    // Valores padrão em caso de erro
-    $receita_total = 0;
-    $receita_mes = 0;
-    $media_mensal = 0;
-    error_log("Erro ao buscar relatórios: " . $e->getMessage());
+    error_log("Erro ao buscar dados para relatórios: " . $e->getMessage());
+    $usuarios_por_tipo = [];
+    $planos_info = ['total_planos' => 0, 'planos_ativos' => 0];
+    $matriculas_ativas = 0;
+    $pagamentos_info = ['total_pagamentos' => 0, 'valor_total' => 0];
+    $agendamentos_mes = 0;
 }
+
+$page_title = "Relatórios - Admin";
+include '../../includes/header.php';
 ?>
 
-     <!-- Receita Total -->
-     <div class="col-md-4 mb-4">
-         <div class="card">
-             <div class="card-body">
-                 <div class="d-flex justify-content-between">
-                     <div>
-                         <h5 class="card-title">Receita Total</h5>
-                         <p class="card-text h4 text-success">
-                             R$ <?php echo number_format($receita_total, 2, ',', '.'); ?>
-                         </p>
-                     </div>
-                     <div class="align-self-center">
-                         <i class="fas fa-money-bill-wave fa-2x text-success"></i>
-                     </div>
-                 </div>
-                 <small class="text-muted">Todos os pagamentos confirmados</small>
-             </div>
-         </div>
-     </div>
-     <div class="col-md-2 mb-3">
-         <div class="card text-center">
-             <div class="card-body">
-                 <h3 class="text-secondary"><?php echo $estatisticas['aulas_agendadas']; ?></h3>
-                 <p class="card-text">Aulas Agendadas</p>
-             </div>
-         </div>
-     </div>
- </div>
+<style>
+:root {
+    --azul-profundo: #1e3a8a;
+    --azul-vibrante: #2563eb;
+    --laranja-vibrante: #f97316;
+    --dourado-brilhante: #d97706;
+    --preto-elegante: #111827;
+    --branco-puro: #ffffff;
+    --cinza-suave: #f8fafc;
+}
 
- <div class="row">
-     <!-- Receita Mensal -->
-     <div class="col-md-6 mb-4">
-         <div class="card">
-             <div class="card-header">
-                 <h5 class="card-title mb-0">Receita Mensal (Últimos 6 meses)</h5>
-             </div>
-             <div class="card-body">
-                 <?php if ($receita_mensal): ?>
-                 <div class="table-responsive">
-                     <table class="table table-sm">
-                         <thead>
-                             <tr>
-                                 <th>Mês</th>
-                                 <th>Matrículas</th>
-                                 <th>Receita</th>
-                             </tr>
-                         </thead>
-                         <tbody>
-                             <?php foreach ($receita_mensal as $mes): ?>
-                             <tr>
-                                 <td><?php echo date('m/Y', strtotime($mes['mes'] . '-01')); ?></td>
-                                 <td><?php echo $mes['matriculas']; ?></td>
-                                 <td>R$ <?php echo number_format($mes['receita'], 2, ',', '.'); ?></td>
-                             </tr>
-                             <?php endforeach; ?>
-                         </tbody>
-                     </table>
-                 </div>
-                 <?php else: ?>
-                 <p class="text-muted">Nenhuma receita nos últimos 6 meses.</p>
-                 <?php endif; ?>
-             </div>
-         </div>
-     </div>
+body {
+    background-color: var(--cinza-suave);
+    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+}
 
-     <!-- Novos Usuários -->
-     <div class="col-md-6 mb-4">
-         <div class="card">
-             <div class="card-header">
-                 <h5 class="card-title mb-0">Novos Usuários (Últimos 30 dias)</h5>
-             </div>
-             <div class="card-body">
-                 <?php if ($novos_usuarios): ?>
-                 <div class="table-responsive">
-                     <table class="table table-sm">
-                         <thead>
-                             <tr>
-                                 <th>Data</th>
-                                 <th>Novos Usuários</th>
-                                 <th>Novos Alunos</th>
-                             </tr>
-                         </thead>
-                         <tbody>
-                             <?php foreach ($novos_usuarios as $dia): ?>
-                             <tr>
-                                 <td><?php echo formatDate($dia['data'], 'd/m/Y'); ?></td>
-                                 <td><?php echo $dia['novos_usuarios']; ?></td>
-                                 <td><?php echo $dia['novos_alunos']; ?></td>
-                             </tr>
-                             <?php endforeach; ?>
-                         </tbody>
-                     </table>
-                 </div>
-                 <?php else: ?>
-                 <p class="text-muted">Nenhum novo usuário nos últimos 30 dias.</p>
-                 <?php endif; ?>
-             </div>
-         </div>
-     </div>
- </div>
+.dashboard-card {
+    border: none;
+    border-radius: 16px;
+    background: var(--branco-puro);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
 
- <!-- Relatório Detalhado -->
- <div class="card">
-     <div class="card-header">
-         <h5 class="card-title mb-0">Relatório Detalhado</h5>
-     </div>
-     <div class="card-body">
-         <div class="row mb-3">
-             <div class="col-md-4">
-                 <label for="data_inicio" class="form-label">Data Início</label>
-                 <input type="date" class="form-control" id="data_inicio" value="<?php echo date('Y-m-01'); ?>">
-             </div>
-             <div class="col-md-4">
-                 <label for="data_fim" class="form-label">Data Fim</label>
-                 <input type="date" class="form-control" id="data_fim" value="<?php echo date('Y-m-d'); ?>">
-             </div>
-             <div class="col-md-4">
-                 <label class="form-label">&nbsp;</label>
-                 <button class="btn btn-primary w-100" onclick="gerarRelatorio()">
-                     <i class="fas fa-chart-bar"></i> Gerar Relatório
-                 </button>
-             </div>
-         </div>
+.dashboard-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: linear-gradient(135deg, var(--azul-vibrante) 0%, var(--laranja-vibrante) 100%);
+}
 
-         <div id="relatorioResultado">
-             <!-- Resultado do relatório será carregado aqui -->
-         </div>
-     </div>
- </div>
+.dashboard-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+}
 
- <script>
-function gerarRelatorio() {
-    const dataInicio = document.getElementById('data_inicio').value;
-    const dataFim = document.getElementById('data_fim').value;
+.stat-number {
+    font-size: 2.5rem;
+    font-weight: 800;
+    margin-bottom: 0.5rem;
+}
 
-    if (!dataInicio || !dataFim) {
-        alert('Por favor, selecione as datas de início e fim.');
-        return;
+.stat-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+    color: white;
+}
+
+.bg-gradient-primary {
+    background: linear-gradient(135deg, var(--azul-vibrante) 0%, var(--azul-profundo) 100%);
+}
+
+.bg-gradient-success {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+.bg-gradient-warning {
+    background: linear-gradient(135deg, var(--laranja-vibrante) 0%, var(--dourado-brilhante) 100%);
+}
+
+.bg-gradient-info {
+    background: linear-gradient(135deg, #06b6d4 0%, #0ea5e9 100%);
+}
+
+.page-title {
+    color: var(--preto-elegante);
+    font-weight: 800;
+    margin-bottom: 0.5rem;
+    font-size: 2.5rem;
+}
+
+.page-subtitle {
+    color: #6b7280;
+    font-weight: 500;
+    font-size: 1.1rem;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.chart-container {
+    background: var(--branco-puro);
+    border-radius: 16px;
+    padding: 2rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    margin-bottom: 2rem;
+}
+
+.table-modern {
+    border-collapse: separate;
+    border-spacing: 0;
+    width: 100%;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+.table-modern thead th {
+    background: var(--azul-profundo);
+    color: white;
+    font-weight: 600;
+    padding: 1rem;
+    border: none;
+}
+
+.table-modern tbody td {
+    padding: 1rem;
+    border-bottom: 1px solid #f3f4f6;
+    vertical-align: middle;
+}
+
+.table-modern tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.table-modern tbody tr:hover {
+    background-color: rgba(59, 130, 246, 0.05);
+}
+
+.fade-in {
+    animation: fadeIn 0.5s ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
     }
 
-    showLoading(document.querySelector('#relatorioResultado').parentElement.querySelector('button'));
-
-    fetch(`../../includes/functions.php?action=gerar_relatorio&data_inicio=${dataInicio}&data_fim=${dataFim}`)
-        .then(response => response.text())
-        .then(html => {
-            document.getElementById('relatorioResultado').innerHTML = html;
-            hideLoading();
-        })
-        .catch(error => {
-            hideLoading();
-            alert('Erro ao gerar relatório.');
-            console.error('Error:', error);
-        });
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
+</style>
 
-function exportarRelatorio() {
-    // Simular exportação (em produção, integrar com biblioteca de exportação)
-    alert('Funcionalidade de exportação será implementada aqui!');
+<div class="container-fluid py-4">
+    <!-- Header Section -->
+    <div class="row mb-5 fade-in">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="page-title">Relatórios</h1>
+                    <p class="page-subtitle">Estatísticas e insights do sistema</p>
+                </div>
+                <div class="d-flex gap-3">
+                    <button class="btn btn-outline-primary">
+                        <i class="fas fa-download me-2"></i>Exportar
+                    </button>
+                    <button class="btn btn-primary">
+                        <i class="fas fa-sync-alt me-2"></i>Atualizar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
-    // Exemplo de implementação:
-    // window.location.href = `../../includes/export.php?type=excel&data_inicio=...&data_fim=...`;
-}
+    <!-- Stats Cards -->
+    <div class="stats-grid fade-in">
+        <!-- Total de Usuários -->
+        <div class="dashboard-card">
+            <div class="card-body p-4">
+                <div class="stat-icon bg-gradient-primary">
+                    <i class="fas fa-users"></i>
+                </div>
+                <div class="stat-number text-primary">
+                    <?php 
+                    $total_usuarios = array_sum(array_column($usuarios_por_tipo, 'total'));
+                    echo $total_usuarios; 
+                    ?>
+                </div>
+                <p class="card-text fw-semibold text-dark mb-1">Total de Usuários</p>
+                <small class="text-muted">Todos os usuários cadastrados</small>
+            </div>
+        </div>
 
-// Gerar relatório automático para o mês atual
-document.addEventListener('DOMContentLoaded', function() {
-    gerarRelatorio();
-});
- </script>
+        <!-- Matrículas Ativas -->
+        <div class="dashboard-card">
+            <div class="card-body p-4">
+                <div class="stat-icon bg-gradient-success">
+                    <i class="fas fa-id-card"></i>
+                </div>
+                <div class="stat-number text-success">
+                    <?php echo $matriculas_ativas; ?>
+                </div>
+                <p class="card-text fw-semibold text-dark mb-1">Matrículas Ativas</p>
+                <small class="text-muted">Alunos ativos no sistema</small>
+            </div>
+        </div>
 
- <?php include '../../includes/footer.php'; ?>
+        <!-- Planos Ativos -->
+        <div class="dashboard-card">
+            <div class="card-body p-4">
+                <div class="stat-icon bg-gradient-warning">
+                    <i class="fas fa-clipboard-list"></i>
+                </div>
+                <div class="stat-number text-warning">
+                    <?php echo $planos_info['planos_ativos'] ?? 0; ?>
+                </div>
+                <p class="card-text fw-semibold text-dark mb-1">Planos Ativos</p>
+                <small class="text-muted">Disponíveis para contratação</small>
+            </div>
+        </div>
+
+        <!-- Receita Total -->
+        <div class="dashboard-card">
+            <div class="card-body p-4">
+                <div class="stat-icon bg-gradient-info">
+                    <i class="fas fa-dollar-sign"></i>
+                </div>
+                <div class="stat-number text-info">
+                    R$ <?php echo number_format($pagamentos_info['valor_total'] ?? 0, 2, ',', '.'); ?>
+                </div>
+                <p class="card-text fw-semibold text-dark mb-1">Receita Total</p>
+                <small class="text-muted">Valor arrecadado</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="row fade-in">
+        <!-- Distribuição de Usuários por Tipo -->
+        <div class="col-lg-6 mb-4">
+            <div class="chart-container">
+                <h4 class="fw-bold mb-4">
+                    <i class="fas fa-chart-pie me-2 text-primary"></i>
+                    Distribuição de Usuários por Tipo
+                </h4>
+                <?php if (!empty($usuarios_por_tipo)): ?>
+                <div class="table-responsive">
+                    <table class="table table-modern">
+                        <thead>
+                            <tr>
+                                <th>Tipo</th>
+                                <th>Total</th>
+                                <th>Ativos</th>
+                                <th>Percentual</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php 
+                            $total_geral = array_sum(array_column($usuarios_por_tipo, 'total'));
+                            foreach ($usuarios_por_tipo as $tipo): 
+                                $percentual = $total_geral > 0 ? ($tipo['total'] / $total_geral) * 100 : 0;
+                            ?>
+                            <tr>
+                                <td>
+                                    <span class="fw-bold text-capitalize">
+                                        <?php echo $tipo['tipo']; ?>
+                                    </span>
+                                </td>
+                                <td><?php echo $tipo['total']; ?></td>
+                                <td>
+                                    <span class="badge bg-success">
+                                        <?php echo $tipo['ativos']; ?>
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="progress flex-grow-1 me-2" style="height: 8px;">
+                                            <div class="progress-bar bg-primary"
+                                                style="width: <?php echo $percentual; ?>%">
+                                            </div>
+                                        </div>
+                                        <span class="text-muted small">
+                                            <?php echo number_format($percentual, 1); ?>%
+                                        </span>
+                                    </div>
+                                </td>
+                            </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+                <?php else: ?>
+                <div class="text-center py-4">
+                    <i class="fas fa-chart-pie fa-3x text-muted mb-3"></i>
+                    <p class="text-muted">Nenhum dado disponível para exibir</p>
+                </div>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <!-- Estatísticas Gerais -->
+        <div class="col-lg-6 mb-4">
+            <div class="chart-container">
+                <h4 class="fw-bold mb-4">
+                    <i class="fas fa-chart-bar me-2 text-success"></i>
+                    Estatísticas Gerais
+                </h4>
+                <div class="row">
+                    <div class="col-6 mb-3">
+                        <div class="card bg-light border-0">
+                            <div class="card-body text-center">
+                                <i class="fas fa-calendar-check fa-2x text-primary mb-2"></i>
+                                <h5 class="fw-bold"><?php echo $agendamentos_mes; ?></h5>
+                                <small class="text-muted">Agendamentos este mês</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 mb-3">
+                        <div class="card bg-light border-0">
+                            <div class="card-body text-center">
+                                <i class="fas fa-credit-card fa-2x text-success mb-2"></i>
+                                <h5 class="fw-bold"><?php echo $pagamentos_info['total_pagamentos'] ?? 0; ?></h5>
+                                <small class="text-muted">Pagamentos processados</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 mb-3">
+                        <div class="card bg-light border-0">
+                            <div class="card-body text-center">
+                                <i class="fas fa-box fa-2x text-warning mb-2"></i>
+                                <h5 class="fw-bold"><?php echo $planos_info['total_planos'] ?? 0; ?></h5>
+                                <small class="text-muted">Total de planos</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 mb-3">
+                        <div class="card bg-light border-0">
+                            <div class="card-body text-center">
+                                <i class="fas fa-percentage fa-2x text-info mb-2"></i>
+                                <h5 class="fw-bold">
+                                    <?php 
+                                    $taxa_ativos = $total_usuarios > 0 ? 
+                                        (array_sum(array_column($usuarios_por_tipo, 'ativos')) / $total_usuarios) * 100 : 0;
+                                    echo number_format($taxa_ativos, 1); 
+                                    ?>%
+                                </h5>
+                                <small class="text-muted">Taxa de usuários ativos</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Resumo Financeiro -->
+    <div class="row fade-in">
+        <div class="col-12">
+            <div class="chart-container">
+                <h4 class="fw-bold mb-4">
+                    <i class="fas fa-chart-line me-2 text-success"></i>
+                    Resumo Financeiro
+                </h4>
+                <div class="row text-center">
+                    <div class="col-md-3 mb-3">
+                        <div class="card border-0 bg-success text-white">
+                            <div class="card-body">
+                                <i class="fas fa-dollar-sign fa-2x mb-2"></i>
+                                <h4 class="fw-bold">
+                                    R$ <?php echo number_format($pagamentos_info['valor_total'] ?? 0, 2, ',', '.'); ?>
+                                </h4>
+                                <p class="mb-0">Receita Total</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="card border-0 bg-primary text-white">
+                            <div class="card-body">
+                                <i class="fas fa-receipt fa-2x mb-2"></i>
+                                <h4 class="fw-bold"><?php echo $pagamentos_info['total_pagamentos'] ?? 0; ?></h4>
+                                <p class="mb-0">Transações</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="card border-0 bg-info text-white">
+                            <div class="card-body">
+                                <i class="fas fa-calculator fa-2x mb-2"></i>
+                                <h4 class="fw-bold">
+                                    R$ <?php 
+                                    $media = ($pagamentos_info['total_pagamentos'] ?? 0) > 0 ? 
+                                        ($pagamentos_info['valor_total'] ?? 0) / ($pagamentos_info['total_pagamentos'] ?? 1) : 0;
+                                    echo number_format($media, 2, ',', '.'); 
+                                    ?>
+                                </h4>
+                                <p class="mb-0">Ticket Médio</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="card border-0 bg-warning text-white">
+                            <div class="card-body">
+                                <i class="fas fa-chart-bar fa-2x mb-2"></i>
+                                <h4 class="fw-bold"><?php echo $matriculas_ativas; ?></h4>
+                                <p class="mb-0">Clientes Ativos</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<?php include '../../includes/footer.php'; ?>
