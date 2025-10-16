@@ -1,4 +1,4 @@
- // =============================================
+// =============================================
 // JAVASCRIPT GLOBAL - ACADEMIA FIT
 // =============================================
 
@@ -86,6 +86,9 @@ function initializeSystem() {
     // Inicializar máscaras
     initializeMasks();
     
+    // Inicializar formulário multi-step
+    initializeMultiStepForm();
+    
     // Configurar CSRF token para requisições AJAX
     setupCSRF();
 }
@@ -119,6 +122,153 @@ function initializeMasks() {
             e.target.value = value;
         });
     });
+}
+
+/**
+ * Inicializa formulário multi-step
+ */
+function initializeMultiStepForm() {
+    const cadastroForm = document.getElementById('cadastroForm');
+    if (!cadastroForm) return;
+
+    let currentStep = 1;
+    const totalSteps = 3;
+
+    // Inicializar progresso
+    updateProgress();
+
+    // Seleção de tipo de usuário
+    document.querySelectorAll('.type-option').forEach(option => {
+        option.addEventListener('click', function() {
+            document.querySelectorAll('.type-option').forEach(opt => opt.classList.remove('selected'));
+            this.classList.add('selected');
+            document.getElementById('tipo_usuario').value = this.dataset.type;
+        });
+    });
+
+    // Navegação entre steps
+    window.nextStep = function(step) {
+        if (validateStep(currentStep)) {
+            document.getElementById(`step${currentStep}`).classList.remove('active');
+            document.getElementById(`step${step}`).classList.add('active');
+            document.querySelector(`.step[data-step="${currentStep}"]`).classList.remove('active');
+            document.querySelector(`.step[data-step="${step}"]`).classList.add('active');
+            currentStep = step;
+            updateProgress();
+        }
+    };
+
+    window.prevStep = function(step) {
+        document.getElementById(`step${currentStep}`).classList.remove('active');
+        document.getElementById(`step${step}`).classList.add('active');
+        document.querySelector(`.step[data-step="${currentStep}"]`).classList.remove('active');
+        document.querySelector(`.step[data-step="${step}"]`).classList.add('active');
+        currentStep = step;
+        updateProgress();
+    };
+
+    function updateProgress() {
+        const progress = ((currentStep - 1) / (totalSteps - 1)) * 100;
+        const progressFill = document.getElementById('progressFill');
+        if (progressFill) {
+            progressFill.style.width = `${progress}%`;
+        }
+    }
+
+    // Validação de steps
+    function validateStep(step) {
+        switch(step) {
+            case 1:
+                const tipo = document.getElementById('tipo_usuario').value;
+                if (!tipo) {
+                    alert('Por favor, selecione um tipo de usuário');
+                    return false;
+                }
+                return true;
+            case 2:
+                const nome = document.getElementById('nome').value;
+                const email = document.getElementById('email').value;
+                const telefone = document.getElementById('telefone').value;
+                
+                if (!nome || !email || !telefone) {
+                    alert('Por favor, preencha todos os campos obrigatórios');
+                    return false;
+                }
+                return true;
+            default:
+                return true;
+        }
+    }
+
+    // Verificação de força da senha
+    const senhaInput = document.getElementById('senha');
+    if (senhaInput) {
+        senhaInput.addEventListener('input', function(e) {
+            const password = e.target.value;
+            const strengthBar = document.getElementById('passwordStrength');
+            const feedback = document.getElementById('passwordFeedback');
+            
+            if (!strengthBar || !feedback) return;
+            
+            let strength = 0;
+            let feedbackText = '';
+
+            if (password.length >= 6) strength += 25;
+            if (password.match(/[a-z]/) && password.match(/[A-Z]/)) strength += 25;
+            if (password.match(/\d/)) strength += 25;
+            if (password.match(/[^a-zA-Z\d]/)) strength += 25;
+
+            strengthBar.style.width = `${strength}%`;
+            
+            if (strength < 50) {
+                strengthBar.className = 'strength-fill strength-weak';
+                feedbackText = 'Senha fraca';
+            } else if (strength < 75) {
+                strengthBar.className = 'strength-fill strength-medium';
+                feedbackText = 'Senha média';
+            } else {
+                strengthBar.className = 'strength-fill strength-strong';
+                feedbackText = 'Senha forte';
+            }
+            
+            feedback.textContent = feedbackText;
+        });
+    }
+
+    // Verificação de confirmação de senha
+    const confirmarSenhaInput = document.getElementById('confirmar_senha');
+    if (confirmarSenhaInput) {
+        confirmarSenhaInput.addEventListener('input', function(e) {
+            const senha = document.getElementById('senha').value;
+            const confirmar = e.target.value;
+            const matchText = document.getElementById('passwordMatch');
+            
+            if (!matchText) return;
+            
+            if (confirmar) {
+                if (senha === confirmar) {
+                    matchText.textContent = 'Senhas coincidem';
+                    matchText.style.color = '#10b981';
+                } else {
+                    matchText.textContent = 'Senhas não coincidem';
+                    matchText.style.color = '#ef4444';
+                }
+            } else {
+                matchText.textContent = '';
+            }
+        });
+    }
+
+    // Auto-selecionar tipo baseado na URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const tipo = urlParams.get('tipo');
+    
+    if (tipo) {
+        const option = document.querySelector(`.type-option[data-type="${tipo}"]`);
+        if (option) {
+            option.click();
+        }
+    }
 }
 
 /**

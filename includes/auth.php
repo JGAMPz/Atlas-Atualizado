@@ -3,7 +3,7 @@ session_start();
 
 function verificarLogin() {
     if (!isset($_SESSION['usuario_id'])) {
-        header('Location: ../login.php');
+        header('Location: ' . BASE_URL . '/login.php');
         exit;
     }
 }
@@ -12,7 +12,7 @@ function verificarTipo($tipoPermitido) {
     verificarLogin();
     
     if ($_SESSION['usuario_tipo'] != $tipoPermitido) {
-        header('Location: ../login.php');
+        header('Location:' . BASE_URL . '/login.php');
         exit;
     }
 }

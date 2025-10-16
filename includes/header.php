@@ -48,7 +48,8 @@ $usuario = getUsuarioInfo();
                     </li>
                     <?php elseif ($usuario['tipo'] == 'admin'): ?>
                     <li class="nav-item">
-                        <a class="nav-link" href="planos.php">Planos</a>
+                        <a class="nav-link" href="<?php echo BASE_URL; ?>/dashboard/admin/planos.php">Planos</a>
+
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="usuarios.php">Usuários</a>
