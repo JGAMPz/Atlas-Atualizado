@@ -31,25 +31,24 @@ $usuario = getUsuarioInfo();
                     </li>
                     <?php if ($usuario['tipo'] == 'aluno'): ?>
                     <li class="nav-item">
-                        <a class="nav-link" href="planos.php">Planos</a>
+                        <a class="nav-link" href="../aluno/planos.php">Planos</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="agenda.php">Agenda</a>
+                        <a class="nav-link" href="../aluno/agenda.php">Agenda</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="pagamento.php">Pagamentos</a>
+                        <a class="nav-link" href="../aluno/pagamento.php">Pagamentos</a>
                     </li>
                     <?php elseif ($usuario['tipo'] == 'personal'): ?>
                     <li class="nav-item">
-                        <a class="nav-link" href="agenda.php">Minha Agenda</a>
+                        <a class="nav-link" href="../personal/agenda.php">Minha Agenda</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="alunos.php">Meus Alunos</a>
+                        <a class="nav-link" href="../personal/alunos.php">Meus Alunos</a>
                     </li>
                     <?php elseif ($usuario['tipo'] == 'admin'): ?>
                     <li class="nav-item">
-                        <a class="nav-link" href="<?php echo BASE_URL; ?>/dashboard/admin/planos.php">Planos</a>
-
+                        <a class="nav-link" href="planos.php">Gerenciar Planos</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="usuarios.php">Usuários</a>
@@ -70,7 +69,6 @@ $usuario = getUsuarioInfo();
                             <?php echo $usuario['nome']; ?>
                             <small class="text-muted">
                                 (<?php 
-                                // Mostra o tipo de usuário de forma segura
                                 if (isset($usuario['tipo'])) {
                                     switch($usuario['tipo']) {
                                         case 'admin': echo 'Administrador'; break;
@@ -83,7 +81,10 @@ $usuario = getUsuarioInfo();
                             </small>
                         </a>
                         <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="#"><i class="fas fa-cog me-2"></i>Configurações</a></li>
+                            <li><a class="dropdown-item" href="perfil.php"><i class="fas fa-user me-2"></i>Meu
+                                    Perfil</a></li>
+                            <li><a class="dropdown-item" href="configuracoes.php"><i
+                                        class="fas fa-cog me-2"></i>Configurações</a></li>
                             <li>
                                 <hr class="dropdown-divider">
                             </li>

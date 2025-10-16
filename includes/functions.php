@@ -39,6 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
             case 'processar_pagamento':
                 if (isset($_POST['plano_id'], $_POST['metodo_pagamento'])) {
+                    session_start();
                     if (!isset($_SESSION['usuario_id'])) {
                         echo json_encode(['success' => false, 'message' => 'Usuário não logado.']);
                         exit;
@@ -50,59 +51,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 }
                 exit;
                 break;
-
-            case 'excluir_plano':
-                if (isset($_POST['plano_id'])) {
-                    if (!isset($_SESSION['usuario_id']) || $_SESSION['usuario_tipo'] !== 'admin') {
-                        echo json_encode(['success' => false, 'message' => 'Acesso negado.']);
-                        exit;
+                
+                case 'excluir_plano':
+                    if (isset($_POST['plano_id'])) {
+                        session_start();
+                        if (!isset($_SESSION['usuario_id']) || $_SESSION['usuario_tipo'] !== 'admin') {
+                            echo json_encode(['success' => false, 'message' => 'Acesso negado.']);
+                            exit;
+                        }
+                        $resultado = excluirPlano($_POST['plano_id']);
+                        echo json_encode($resultado);
+                    } else {
+                        echo json_encode(['success' => false, 'message' => 'ID do plano não especificado.']);
                     }
-                    $resultado = excluirPlano($_POST['plano_id']);
-                    echo json_encode($resultado);
-                } else {
-                    echo json_encode(['success' => false, 'message' => 'ID do plano não especificado.']);
-                }
-                exit;
-                break;
+                    exit;
+                    break;
 
-            case 'editar_plano':
-                if (isset($_POST['plano_id'])) {
-                    if (!isset($_SESSION['usuario_id']) || $_SESSION['usuario_tipo'] !== 'admin') {
-                        echo json_encode(['success' => false, 'message' => 'Acesso negado.']);
+                case 'criar_plano':
+                    if (isset($_POST['nome'], $_POST['preco'])) {
+                        session_start();
+                        if (!isset($_SESSION['usuario_id']) || $_SESSION['usuario_tipo'] !== 'admin') {
+                            $_SESSION['erro'] = 'Acesso negado.';
+                            header('Location: /dashboard/admin/planos.php');
+                            exit;
+                        }
+                        
+                        $resultado = criarPlano($_POST);
+                        
+                        if ($resultado['success']) {
+                            $_SESSION['sucesso'] = $resultado['message'];
+                        } else {
+                            $_SESSION['erro'] = $resultado['message'];
+                        }
+                        
+                        header('Location: /dashboard/admin/planos.php');
                         exit;
-                    }
-                    $resultado = editarPlano($_POST);
-                    echo json_encode($resultado);
-                } else {
-                    echo json_encode(['success' => false, 'message' => 'Dados incompletos para editar plano.']);
-                }
-                exit;
-                break;
-
-            case 'criar_plano':
-                if (isset($_POST['nome'], $_POST['preco'])) {
-                    if (!isset($_SESSION['usuario_id']) || $_SESSION['usuario_tipo'] !== 'admin') {
-                        $_SESSION['erro'] = 'Acesso negado.';
+                    } else {
+                        $_SESSION['erro'] = 'Dados incompletos.';
                         header('Location: /dashboard/admin/planos.php');
                         exit;
                     }
-                    
-                    $resultado = criarPlano($_POST);
-                    
-                    if ($resultado['success']) {
-                        $_SESSION['sucesso'] = $resultado['message'];
-                    } else {
-                        $_SESSION['erro'] = $resultado['message'];
-                    }
-                    
-                    header('Location: /dashboard/admin/planos.php');
-                    exit;
-                } else {
-                    $_SESSION['erro'] = 'Dados incompletos.';
-                    header('Location: /dashboard/admin/planos.php');
-                    exit;
-                }
-                break;
+                    break;
                 
             default:
                 echo json_encode(['success' => false, 'message' => 'Ação não reconhecida']);
@@ -385,7 +374,7 @@ function processarPagamento($plano_id, $usuario_id, $metodo_pagamento) {
         
         // Criar matrícula
         $data_inicio = date('Y-m-d H:i:s');
-        $data_fim = date('Y-m-d H:i:s', strtotime("+{$plano['duracao_dias']} days"));
+        $data_fim = date('Y-m-d H:i:s', strtotime("+{$plano['duracao']} days"));
         $stmt = $pdo->prepare("INSERT INTO matriculas (user_id, plano_id, data_inicio, data_fim, status) VALUES (?, ?, ?, ?, 'ativa')");
         $stmt->execute([$usuario_id, $plano_id, $data_inicio, $data_fim]);
         $matricula_id = $pdo->lastInsertId();
@@ -419,16 +408,16 @@ function criarPlano($data) {
         $nome = sanitizeInput($data['nome']);
         $descricao = sanitizeInput($data['descricao'] ?? '');
         $preco = floatval($data['preco']);
-        $duracao_dias = intval($data['duracao_dias'] ?? 30);
+        $duracao = intval($data['duracao_dias'] ?? 30);
         $inclui_personal = isset($data['inclui_personal']) ? 1 : 0;
         $status = sanitizeInput($data['status'] ?? 'ativo');
         
         $stmt = $pdo->prepare("
-            INSERT INTO planos (nome, descricao, preco, duracao_dias, inclui_personal, status) 
+            INSERT INTO planos (nome, descricao, preco, duracao, inclui_personal, status) 
             VALUES (?, ?, ?, ?, ?, ?)
         ");
         
-        $result = $stmt->execute([$nome, $descricao, $preco, $duracao_dias, $inclui_personal, $status]);
+        $result = $stmt->execute([$nome, $descricao, $preco, $duracao, $inclui_personal, $status]);
         
         if ($result && $stmt->rowCount() > 0) {
             logActivity($_SESSION['usuario_id'], 'criar_plano', "Criou plano: {$nome}");
@@ -442,115 +431,6 @@ function criarPlano($data) {
     } catch (PDOException $e) {
         error_log("Erro PDO ao criar plano: " . $e->getMessage());
         return ['success' => false, 'message' => 'Erro no banco de dados.'];
-    }
-}
-
-function editarPlano($data) {
-    global $pdo;
-    
-    try {
-        // DEBUG
-        error_log("=== EDITAR PLANO - DADOS RECEBIDOS ===");
-        error_log(print_r($data, true));
-        
-        if (!isset($data['plano_id'])) {
-            return ['success' => false, 'message' => 'ID do plano não especificado.'];
-        }
-        
-        $plano_id = intval($data['plano_id']);
-        $nome = sanitizeInput($data['nome']);
-        $descricao = sanitizeInput($data['descricao'] ?? '');
-        $preco = floatval($data['preco']);
-        $duracao_dias = intval($data['duracao_dias'] ?? 30);
-        
-        // DEBUG - Verificar o valor de inclui_personal
-        $inclui_personal = isset($data['inclui_personal']) ? intval($data['inclui_personal']) : 0;
-        error_log("inclui_personal recebido: " . $data['inclui_personal']);
-        error_log("inclui_personal convertido: " . $inclui_personal);
-        
-        $status = sanitizeInput($data['status'] ?? 'ativo');
-        
-        // Verificar se o plano existe
-        $stmt = $pdo->prepare("SELECT id, nome FROM planos WHERE id = ?");
-        $stmt->execute([$plano_id]);
-        $plano_existente = $stmt->fetch();
-        
-        if (!$plano_existente) {
-            return ['success' => false, 'message' => 'Plano não encontrado.'];
-        }
-        
-        // Atualizar o plano
-        $stmt = $pdo->prepare("
-            UPDATE planos 
-            SET nome = ?, descricao = ?, preco = ?, duracao_dias = ?, inclui_personal = ?, status = ?
-            WHERE id = ?
-        ");
-        
-        $result = $stmt->execute([$nome, $descricao, $preco, $duracao_dias, $inclui_personal, $status, $plano_id]);
-        
-        // DEBUG - Verificar resultado
-        error_log("UPDATE executado: " . ($result ? 'SUCESSO' : 'FALHA'));
-        if (!$result) {
-            $errorInfo = $stmt->errorInfo();
-            error_log("Erro no UPDATE: " . print_r($errorInfo, true));
-        }
-        
-        if ($result) {
-            logActivity($_SESSION['usuario_id'], 'editar_plano', "Editou plano: {$nome} (ID: {$plano_id}) - Personal: {$inclui_personal}");
-            return ['success' => true, 'message' => 'Plano atualizado com sucesso!'];
-        } else {
-            $errorInfo = $stmt->errorInfo();
-            error_log("Erro ao editar plano: " . print_r($errorInfo, true));
-            return ['success' => false, 'message' => 'Erro ao atualizar plano no banco de dados.'];
-        }
-        
-    } catch (PDOException $e) {
-        error_log("Erro PDO ao editar plano: " . $e->getMessage());
-        return ['success' => false, 'message' => 'Erro no banco de dados: ' . $e->getMessage()];
-    }
-}
-
-/**
- * Excluir plano
- */
-function excluirPlano($plano_id) {
-    global $pdo;
-    
-    try {
-        $plano_id = intval($plano_id);
-        
-        // Verificar se o plano existe
-        $stmt = $pdo->prepare("SELECT nome FROM planos WHERE id = ?");
-        $stmt->execute([$plano_id]);
-        $plano = $stmt->fetch();
-        
-        if (!$plano) {
-            return ['success' => false, 'message' => 'Plano não encontrado.'];
-        }
-        
-        // Verificar se há matrículas ativas com este plano
-        $stmt = $pdo->prepare("SELECT COUNT(*) as total FROM matriculas WHERE plano_id = ? AND status = 'ativa'");
-        $stmt->execute([$plano_id]);
-        $matriculas_ativas = $stmt->fetch()['total'];
-        
-        if ($matriculas_ativas > 0) {
-            return ['success' => false, 'message' => 'Não é possível excluir este plano pois existem matrículas ativas vinculadas a ele.'];
-        }
-        
-        // Excluir o plano
-        $stmt = $pdo->prepare("DELETE FROM planos WHERE id = ?");
-        $result = $stmt->execute([$plano_id]);
-        
-        if ($result && $stmt->rowCount() > 0) {
-            logActivity($_SESSION['usuario_id'], 'excluir_plano', "Excluiu plano: {$plano['nome']} (ID: {$plano_id})");
-            return ['success' => true, 'message' => 'Plano excluído com sucesso!'];
-        } else {
-            return ['success' => false, 'message' => 'Erro ao excluir plano ou plano não encontrado.'];
-        }
-        
-    } catch (PDOException $e) {
-        error_log("Erro PDO ao excluir plano: " . $e->getMessage());
-        return ['success' => false, 'message' => 'Erro no banco de dados ao excluir plano.'];
     }
 }
 
@@ -667,5 +547,95 @@ function criarHorariosDisponiveis($personal_id, $data, $horarios) {
     
     return true;
 }
+/**
+ * Editar plano existente
+ */
+function editarPlano($data) {
+    global $pdo;
+    
+    try {
+        if (!isset($data['plano_id'])) {
+            return ['success' => false, 'message' => 'ID do plano não especificado.'];
+        }
+        
+        $plano_id = intval($data['plano_id']);
+        $nome = sanitizeInput($data['nome']);
+        $descricao = sanitizeInput($data['descricao'] ?? '');
+        $preco = floatval($data['preco']);
+        $duracao = intval($data['duracao_dias'] ?? 30);
+        $inclui_personal = isset($data['inclui_personal']) ? 1 : 0;
+        $status = sanitizeInput($data['status'] ?? 'ativo');
+        
+        // Verificar se o plano existe
+        $stmt = $pdo->prepare("SELECT id FROM planos WHERE id = ?");
+        $stmt->execute([$plano_id]);
+        if (!$stmt->fetch()) {
+            return ['success' => false, 'message' => 'Plano não encontrado.'];
+        }
+        
+        // Atualizar o plano
+        $stmt = $pdo->prepare("
+            UPDATE planos 
+            SET nome = ?, descricao = ?, preco = ?, duracao = ?, inclui_personal = ?, status = ?
+            WHERE id = ?
+        ");
+        
+        $result = $stmt->execute([$nome, $descricao, $preco, $duracao, $inclui_personal, $status, $plano_id]);
+        
+        if ($result && $stmt->rowCount() > 0) {
+            logActivity($_SESSION['usuario_id'], 'editar_plano', "Editou plano: {$nome} (ID: {$plano_id})");
+            return ['success' => true, 'message' => 'Plano atualizado com sucesso!'];
+        } else {
+            return ['success' => false, 'message' => 'Nenhuma alteração foi realizada.'];
+        }
+        
+    } catch (PDOException $e) {
+        error_log("Erro PDO ao editar plano: " . $e->getMessage());
+        return ['success' => false, 'message' => 'Erro ao editar plano.'];
+    }
+}
 
+/**
+ * Excluir plano
+ */
+function excluirPlano($plano_id) {
+    global $pdo;
+    
+    try {
+        $plano_id = intval($plano_id);
+        
+        // Verificar se o plano existe
+        $stmt = $pdo->prepare("SELECT nome FROM planos WHERE id = ?");
+        $stmt->execute([$plano_id]);
+        $plano = $stmt->fetch();
+        
+        if (!$plano) {
+            return ['success' => false, 'message' => 'Plano não encontrado.'];
+        }
+        
+        // Verificar se há matrículas ativas com este plano
+        $stmt = $pdo->prepare("SELECT COUNT(*) as total FROM matriculas WHERE plano_id = ? AND status = 'ativa'");
+        $stmt->execute([$plano_id]);
+        $matriculas_ativas = $stmt->fetch()['total'];
+        
+        if ($matriculas_ativas > 0) {
+            return ['success' => false, 'message' => 'Não é possível excluir este plano pois existem matrículas ativas vinculadas a ele.'];
+        }
+        
+        // Excluir o plano
+        $stmt = $pdo->prepare("DELETE FROM planos WHERE id = ?");
+        $result = $stmt->execute([$plano_id]);
+        
+        if ($result && $stmt->rowCount() > 0) {
+            logActivity($_SESSION['usuario_id'], 'excluir_plano', "Excluiu plano: {$plano['nome']} (ID: {$plano_id})");
+            return ['success' => true, 'message' => 'Plano excluído com sucesso!'];
+        } else {
+            return ['success' => false, 'message' => 'Erro ao excluir plano.'];
+        }
+        
+    } catch (PDOException $e) {
+        error_log("Erro PDO ao excluir plano: " . $e->getMessage());
+        return ['success' => false, 'message' => 'Erro ao excluir plano.'];
+    }
+}
 ?>

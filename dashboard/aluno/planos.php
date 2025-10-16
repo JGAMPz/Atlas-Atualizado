@@ -59,7 +59,7 @@ include '../../includes/header.php';
 
                             <div class="features mb-3">
                                 <p><i class="fas fa-calendar-day text-success me-2"></i>
-                                    <strong>Duração:</strong> <?php echo $plano['duracao_dias']; ?> dias
+                                    <strong>Duração:</strong> <?php echo $plano['duracao']; ?> dias
                                 </p>
 
                                 <?php if ($plano['inclui_personal']): ?>
@@ -99,9 +99,9 @@ include '../../includes/header.php';
                                 </h3>
                                 <p class="text-muted"><?php echo htmlspecialchars($plano['descricao']); ?></p>
 
-                                <form method="POST" action="processar_pagamento.php" class="mt-4">
+                                <form method="POST"action="../../includes/functions.php" class="mt-4">
                                     <input type="hidden" name="plano_id" value="<?php echo $plano['id']; ?>">
-
+                                    <input type="hidden" name="action" value="processar_pagamento"> 
                                     <div class="d-grid gap-3">
                                         <button type="submit" class="btn btn-success btn-lg py-3"
                                             name="metodo_pagamento" value="pix">

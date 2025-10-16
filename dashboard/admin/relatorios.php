@@ -3,33 +3,34 @@ require_once '../../includes/auth.php';
 require_once '../../includes/config.php';
 verificarTipo('admin');
 
-// Estatísticas para relatórios
 $stmt = $pdo->query("
     SELECT 
         COUNT(*) as total_usuarios,
         SUM(CASE WHEN tipo = 'aluno' THEN 1 ELSE 0 END) as total_alunos,
         SUM(CASE WHEN tipo = 'personal' THEN 1 ELSE 0 END) as total_personais,
         (SELECT COUNT(*) FROM matriculas WHERE status = 'ativa') as matriculas_ativas,
-        (SELECT SUM(valor_contratado) FROM matriculas WHERE status = 'ativa') as receita_total,
         (SELECT COUNT(*) FROM agenda WHERE status = 'agendado') as aulas_agendadas
     FROM usuarios
     WHERE status = 'ativo'
 ");
 $estatisticas = $stmt->fetch();
 
-// Receita mensal (últimos 6 meses)
 $stmt = $pdo->query("
     SELECT 
-        DATE_FORMAT(data_criacao, '%Y-%m') as mes,
-        SUM(valor_contratado) as receita,
-        COUNT(*) as matriculas
+        DATE_FORMAT(data_inicio, '%Y-%m') as mes,
+        COUNT(*) as matriculas,
+        (SELECT COALESCE(SUM(p.valor), 0) 
+         FROM pagamentos p 
+         INNER JOIN matriculas m ON p.user_id = m.user_id 
+         WHERE p.status = 'pago' 
+         AND DATE_FORMAT(p.data_pagamento, '%Y-%m') = DATE_FORMAT(matriculas.data_inicio, '%Y-%m')
+        ) as receita
     FROM matriculas 
-    WHERE data_criacao >= DATE_SUB(CURRENT_DATE, INTERVAL 6 MONTH)
-    GROUP BY DATE_FORMAT(data_criacao, '%Y-%m')
+    WHERE data_inicio >= DATE_SUB(CURRENT_DATE, INTERVAL 6 MONTH)
+    GROUP BY DATE_FORMAT(data_inicio, '%Y-%m')
     ORDER BY mes
 ");
 $receita_mensal = $stmt->fetchAll();
-
 // Novos usuários (últimos 30 dias)
 $stmt = $pdo->query("
     SELECT 
