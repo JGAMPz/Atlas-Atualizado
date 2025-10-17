@@ -1,30 +1,45 @@
-        </div> <!-- Fecha container -->
-        </main> <!-- Fecha main -->
+    </main>
 
-        <!-- Footer SEMPRE no rodapé -->
-        <footer class="bg-dark text-light py-4 mt-auto">
-            <div class="container">
-                <div class="row">
-                    <div class="col-md-6">
-                        <h5><i class="fas fa-dumbbell"></i> ATLAS</h5>
-                        <p>Seu portal completo para fitness e bem-estar</p>
-                    </div>
-                    <div class="col-md-6 text-md-end">
-                        <p>&copy; <?php echo date('Y'); ?> ATLAS. Todos os direitos reservados.</p>
-                        <p>Desenvolvido com ❤️ para sua saúde</p>
-                    </div>
-                </div>
-            </div>
-        </footer>
+    <!-- Footer -->
+    <footer class="bg-dark text-light py-3 mt-auto">
+        <div class="container text-center">
+            <p>&copy; <?php echo date('Y'); ?> ATLAS - Sistema de Academia. Todos os direitos reservados.</p>
+        </div>
+    </footer>
 
-        <!-- Scripts -->
-        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/js/all.min.js"></script>
-        <script src="../assets/js/main.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
-        <?php if (isset($page_js)): ?>
-        <script src="../assets/js/<?php echo $page_js; ?>"></script>
-        <?php endif; ?>
-        </body>
+    <!-- Script para Notificações -->
+    <script>
+function marcarNotificacaoLida(notificacao_id, element) {
+    // Marcar visualmente como lida
+    element.classList.remove('bg-light');
 
-        </html>
+    // Enviar para o servidor
+    const formData = new FormData();
+    formData.append('action', 'marcar_notificacao_lida');
+    formData.append('notificacao_id', notificacao_id);
+
+    fetch('../../includes/functions.php', {
+            method: 'POST',
+            body: formData
+        }).then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Atualizar contador
+                const badge = document.querySelector('.nav-link .badge');
+                if (badge) {
+                    const currentCount = parseInt(badge.textContent);
+                    if (currentCount > 1) {
+                        badge.textContent = currentCount - 1;
+                    } else {
+                        badge.remove();
+                    }
+                }
+            }
+        });
+}
+    </script>
+    </body>
+
+    </html>

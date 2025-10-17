@@ -73,11 +73,23 @@ include '../../includes/header.php';
 :root {
     --azul-profundo: #1e3a8a;
     --azul-vibrante: #2563eb;
+    --azul-suave: #3b82f6;
+    --laranja-queimado: #ea580c;
     --laranja-vibrante: #f97316;
+    --laranja-suave: #fb923c;
     --dourado-brilhante: #d97706;
+    --dourado-vibrante: #f59e0b;
+    --dourado-suave: #fbbf24;
     --preto-elegante: #111827;
+    --preto-suave: #1f2937;
     --branco-puro: #ffffff;
-    --cinza-suave: #f8fafc;
+    --branco-suave: #f8fafc;
+    --cinza-suave: #f3f4f6;
+    --cinza-medio: #9ca3af;
+    --gradiente-azul: linear-gradient(135deg, var(--azul-profundo) 0%, var(--azul-vibrante) 100%);
+    --gradiente-laranja: linear-gradient(135deg, var(--laranja-queimado) 0%, var(--laranja-vibrante) 100%);
+    --gradiente-dourado: linear-gradient(135deg, var(--dourado-brilhante) 0%, var(--dourado-vibrante) 100%);
+    --gradiente-misto: linear-gradient(135deg, var(--azul-vibrante) 0%, var(--laranja-vibrante) 100%);
 }
 
 body {
@@ -102,7 +114,7 @@ body {
     left: 0;
     width: 4px;
     height: 100%;
-    background: linear-gradient(135deg, var(--azul-vibrante) 0%, var(--laranja-vibrante) 100%);
+    background: var(--gradiente-azul);
 }
 
 .dashboard-card:hover {

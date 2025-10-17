@@ -1,37 +1,40 @@
 <?php
-// Incluir os arquivos necessários PRIMEIRO
-require_once '../../includes/config.php'; // Este define $pdo
+// processar_pagamento.php
+
+// Iniciar sessão apenas se não estiver ativa
+if (session_status() == PHP_SESSION_NONE) {
+    session_start();
+}
+
+require_once '../../includes/config.php';
 require_once '../../includes/auth.php';
 require_once '../../includes/functions.php';
 
-// Agora verificar autenticação
+// Verificar autenticação
 verificarTipo('aluno');
-
 $usuario = getUsuarioInfo();
 
-// DEBUG - Verificar se está funcionando
-error_log("=== PROCESSAR PAGAMENTO INICIADO ===");
-error_log("Usuário: " . $usuario['nome']);
-
+// Verificar se é POST
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    error_log("❌ Não é POST - Redirecionando");
-    $_SESSION['erro'] = 'Método inválido.';
-    header('Location: planos.php');
+    echo json_encode(['success' => false, 'message' => 'Método inválido.']);
     exit;
 }
 
-// Verificar se os dados foram enviados
+// Verificar dados
 if (!isset($_POST['plano_id']) || !isset($_POST['metodo_pagamento'])) {
-    error_log("❌ Dados incompletos");
-    $_SESSION['erro'] = 'Dados incompletos.';
-    header('Location: planos.php');
+    echo json_encode(['success' => false, 'message' => 'Dados incompletos.']);
     exit;
 }
 
-$plano_id = $_POST['plano_id'];
+$plano_id = intval($_POST['plano_id']);
 $metodo_pagamento = $_POST['metodo_pagamento'];
 
-error_log("Plano ID: $plano_id, Método: $metodo_pagamento");
+// Validar método de pagamento
+$metodos_validos = ['pix', 'cartao', 'boleto'];
+if (!in_array($metodo_pagamento, $metodos_validos)) {
+    echo json_encode(['success' => false, 'message' => 'Método de pagamento inválido.']);
+    exit;
+}
 
 try {
     // Buscar dados do plano
@@ -40,13 +43,9 @@ try {
     $plano = $stmt->fetch();
     
     if (!$plano) {
-        error_log("❌ Plano não encontrado: $plano_id");
-        $_SESSION['erro'] = 'Plano não encontrado.';
-        header('Location: planos.php');
+        echo json_encode(['success' => false, 'message' => 'Plano não encontrado ou inativo.']);
         exit;
     }
-
-    error_log("✅ Plano encontrado: " . $plano['nome']);
 
     // Verificar se a tabela pagamentos existe
     $tabela_existe = false;
@@ -57,20 +56,20 @@ try {
         $tabela_existe = false;
     }
 
+    $pagamento_id = null;
+
     if ($tabela_existe) {
         // Usar tabela pagamentos se existir
         $stmt = $pdo->prepare("
-            INSERT INTO pagamentos (usuario_id, plano_id, valor, metodo_pagamento, status) 
-            VALUES (?, ?, ?, ?, 'pendente')
+            INSERT INTO pagamentos (usuario_id, plano_id, valor, metodo_pagamento, status, data_criacao) 
+            VALUES (?, ?, ?, ?, 'pendente', NOW())
         ");
         $stmt->execute([$usuario['id'], $plano_id, $plano['preco'], $metodo_pagamento]);
         $pagamento_id = $pdo->lastInsertId();
-        error_log("✅ Pagamento criado na tabela pagamentos: $pagamento_id");
+        
+        error_log("Pagamento criado: ID $pagamento_id para usuário {$usuario['id']}");
     } else {
         // Se não existir tabela pagamentos, criar matrícula direto
-        error_log("⚠️ Tabela pagamentos não existe, criando matrícula direto");
-        
-        // Verificar se já tem matrícula ativa
         $stmt = $pdo->prepare("SELECT id FROM matriculas WHERE aluno_id = ? AND status = 'ativa'");
         $stmt->execute([$usuario['id']]);
         $matricula_existente = $stmt->fetch();
@@ -83,7 +82,7 @@ try {
                 WHERE aluno_id = ?
             ");
             $stmt->execute([$plano_id, $plano['duracao_dias'], $usuario['id']]);
-            error_log("✅ Matrícula atualizada");
+            error_log("Matrícula atualizada para usuário {$usuario['id']}");
         } else {
             // Criar nova matrícula
             $stmt = $pdo->prepare("
@@ -91,102 +90,112 @@ try {
                 VALUES (?, ?, 'ativa', NOW(), DATE_ADD(NOW(), INTERVAL ? DAY))
             ");
             $stmt->execute([$usuario['id'], $plano_id, $plano['duracao_dias']]);
-            error_log("✅ Nova matrícula criada");
+            error_log("Nova matrícula criada para usuário {$usuario['id']}");
         }
         
-        $_SESSION['sucesso'] = "Plano <strong>{$plano['nome']}</strong> contratado com sucesso!";
-        header('Location: index.php');
+        // Sucesso - matrícula criada/atualizada
+        echo json_encode([
+            'success' => true, 
+            'message' => "Plano {$plano['nome']} contratado com sucesso!",
+            'redirect' => 'index.php'
+        ]);
         exit;
     }
 
-    // Tentar carregar Mercado Pago (modo simulação)
+    // Processar com Mercado Pago se disponível
     $mp_config_path = '../../includes/mercadopago_config.php';
     if (file_exists($mp_config_path)) {
         require_once $mp_config_path;
-        $mp = new MercadoPagoIntegration();
-        error_log("✅ MercadoPagoIntegration carregado");
         
-        $dados_pagamento = [
-            'pagamento_id' => $pagamento_id,
-            'plano_nome' => $plano['nome'],
-            'valor' => (float)$plano['preco'],
-            'email' => $usuario['email'],
-            'nome' => $usuario['nome'],
-            'cpf' => '00000000000'
-        ];
+        try {
+            $mp = new MercadoPagoIntegration();
+            
+            $dados_pagamento = [
+                'pagamento_id' => $pagamento_id,
+                'plano_nome' => $plano['nome'],
+                'valor' => (float)$plano['preco'],
+                'email' => $usuario['email'],
+                'nome' => $usuario['nome'],
+                'cpf' => $usuario['cpf'] ?? '00000000000'
+            ];
 
-        if ($metodo_pagamento === 'pix') {
-            // Pagamento via PIX (simulado)
-            $resultado = $mp->criarPagamentoPix($dados_pagamento);
-            error_log("✅ PIX criado: " . print_r($resultado, true));
-            
-            if ($resultado['success']) {
-                // Atualizar pagamento com dados do PIX
-                if ($tabela_existe) {
-                    $stmt = $pdo->prepare("
-                        UPDATE pagamentos 
-                        SET id_mp = ?, qr_code = ?, pix_copia_cola = ?
-                        WHERE id = ?
-                    ");
-                    $stmt->execute([
-                        $resultado['payment_id'],
-                        $resultado['qr_code'],
-                        $resultado['qr_code_text'],
-                        $pagamento_id
+            if ($metodo_pagamento === 'pix') {
+                $resultado = $mp->criarPagamentoPix($dados_pagamento);
+                
+                if ($resultado['success']) {
+                    // Atualizar pagamento com dados do PIX
+                    if ($tabela_existe) {
+                        $stmt = $pdo->prepare("
+                            UPDATE pagamentos 
+                            SET id_mp = ?, qr_code = ?, pix_copia_cola = ?, status = 'aguardando'
+                            WHERE id = ?
+                        ");
+                        $stmt->execute([
+                            $resultado['payment_id'],
+                            $resultado['qr_code'],
+                            $resultado['qr_code_text'],
+                            $pagamento_id
+                        ]);
+                    }
+                    
+                    // Sucesso com PIX
+                    echo json_encode([
+                        'success' => true,
+                        'message' => $resultado['message'] ?? 'Pagamento PIX criado com sucesso!',
+                        'redirect' => 'pagamento_pix.php',
+                        'pagamento_id' => $pagamento_id
                     ]);
+                    exit;
+                } else {
+                    throw new Exception($resultado['message'] ?? 'Erro ao criar pagamento PIX');
                 }
+            } else {
+                $resultado = $mp->criarPagamento($dados_pagamento);
                 
-                // Redirecionar para página do PIX
-                $_SESSION['pagamento_pix'] = [
-                    'pagamento_id' => $pagamento_id,
-                    'qr_code' => $resultado['qr_code'],
-                    'pix_copia_cola' => $resultado['qr_code_text'],
-                    'valor' => $plano['preco'],
-                    'plano_nome' => $plano['nome'],
-                    'mensagem' => $resultado['message'] ?? ''
-                ];
-                
-                header('Location: pagamento_pix.php');
-                exit;
+                if ($resultado['success']) {
+                    if ($tabela_existe) {
+                        $stmt = $pdo->prepare("UPDATE pagamentos SET id_mp = ?, status = 'processando' WHERE id = ?");
+                        $stmt->execute([$resultado['preference_id'], $pagamento_id]);
+                    }
+                    
+                    echo json_encode([
+                        'success' => true,
+                        'message' => $resultado['message'] ?? 'Pagamento processado com sucesso!',
+                        'redirect' => 'planos.php',
+                        'preference_id' => $resultado['preference_id']
+                    ]);
+                    exit;
+                } else {
+                    throw new Exception($resultado['message'] ?? 'Erro ao criar pagamento');
+                }
             }
             
-        } else {
-            // Pagamento via cartão ou boleto (simulado)
-            $resultado = $mp->criarPagamento($dados_pagamento);
-            error_log("✅ Pagamento criado: " . print_r($resultado, true));
-            
-            if ($resultado['success']) {
-                // Atualizar pagamento com ID da preferência
-                if ($tabela_existe) {
-                    $stmt = $pdo->prepare("UPDATE pagamentos SET id_mp = ? WHERE id = ?");
-                    $stmt->execute([$resultado['preference_id'], $pagamento_id]);
-                }
-                
-                // Em modo simulação: mostrar mensagem
-                $_SESSION['sucesso'] = ($resultado['message'] ?? 'Pagamento processado com sucesso!') . 
-                                     ' Preference ID: ' . $resultado['preference_id'];
-                header('Location: planos.php');
-                exit;
-            }
+        } catch (Exception $e) {
+            error_log("Erro Mercado Pago: " . $e->getMessage());
+            throw new Exception('Erro no gateway de pagamento: ' . $e->getMessage());
         }
         
-        // Se chegou aqui, houve erro no Mercado Pago
-        $_SESSION['erro'] = 'Erro ao processar pagamento: ' . ($resultado['message'] ?? 'Erro desconhecido');
-        header('Location: planos.php');
-        exit;
-        
     } else {
-        error_log("⚠️ Arquivo Mercado Pago não encontrado, usando modo simples");
-        // Modo simples sem Mercado Pago
-        $_SESSION['sucesso'] = "Plano <strong>{$plano['nome']}</strong> contratado com sucesso! (Modo simulação)";
-        header('Location: index.php');
+        // Modo simples sem Mercado Pago - apenas atualizar status para pago
+        if ($tabela_existe) {
+            $stmt = $pdo->prepare("UPDATE pagamentos SET status = 'pago' WHERE id = ?");
+            $stmt->execute([$pagamento_id]);
+        }
+        
+        echo json_encode([
+            'success' => true,
+            'message' => "Plano {$plano['nome']} contratado com sucesso! (Modo simulação)",
+            'redirect' => 'index.php'
+        ]);
         exit;
     }
     
 } catch (Exception $e) {
-    error_log("❌ Erro processar pagamento: " . $e->getMessage());
-    $_SESSION['erro'] = 'Erro ao processar pagamento: ' . $e->getMessage();
-    header('Location: planos.php');
+    error_log("Erro processar_pagamento: " . $e->getMessage());
+    echo json_encode([
+        'success' => false, 
+        'message' => 'Erro ao processar pagamento: ' . $e->getMessage()
+    ]);
     exit;
 }
 ?>

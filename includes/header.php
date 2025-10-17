@@ -1,5 +1,74 @@
 <?php
-$usuario = getUsuarioInfo();
+// Iniciar sessão se não estiver iniciada
+if (session_status() == PHP_SESSION_NONE) {
+    session_start();
+}
+
+// Verificar se usuário está logado
+$usuario_logado = isset($_SESSION['usuario_id']);
+
+// Buscar informações do usuário se estiver logado
+if ($usuario_logado) {
+    // Incluir functions.php se necessário
+    if (!function_exists('getUsuarioInfo')) {
+        require_once '../../includes/functions.php';
+    }
+    
+    $usuario = getUsuarioInfo();
+    
+    // Buscar notificações
+    if (!function_exists('getNotificacoes')) {
+        require_once '../../includes/functions.php';
+    }
+    
+    $notificacoes = getNotificacoes($_SESSION['usuario_id']);
+    $notificacoes_nao_lidas = array_filter($notificacoes, function($n) {
+        return !$n['lida'];
+    });
+    $total_notificacoes = count($notificacoes_nao_lidas);
+} else {
+    $usuario = ['nome' => 'Visitante', 'tipo' => 'visitante'];
+    $notificacoes = [];
+    $total_notificacoes = 0;
+}
+
+// Definir BASE_URL se não estiver definido
+if (!defined('BASE_URL')) {
+    define('BASE_URL', 'http://' . $_SERVER['HTTP_HOST'] . dirname(dirname($_SERVER['PHP_SELF'])));
+}
+
+/**
+ * Formata tempo decorrido (ex: "há 2 minutos") - FUNÇÃO LOCAL NO HEADER
+ */
+function time_elapsed_string($datetime, $full = false) {
+    $now = new DateTime;
+    $ago = new DateTime($datetime);
+    $diff = $now->diff($ago);
+
+    $diff->w = floor($diff->d / 7);
+    $diff->d -= $diff->w * 7;
+
+    $string = array(
+        'y' => 'ano',
+        'm' => 'mês',
+        'w' => 'semana',
+        'd' => 'dia',
+        'h' => 'hora',
+        'i' => 'minuto',
+        's' => 'segundo',
+    );
+    
+    foreach ($string as $k => &$v) {
+        if ($diff->$k) {
+            $v = $diff->$k . ' ' . $v . ($diff->$k > 1 ? 's' : '');
+        } else {
+            unset($string[$k]);
+        }
+    }
+
+    if (!$full) $string = array_slice($string, 0, 1);
+    return $string ? 'há ' . implode(', ', $string) : 'agora mesmo';
+}
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -29,7 +98,7 @@ $usuario = getUsuarioInfo();
                     <li class="nav-item">
                         <a class="nav-link" href="index.php">Dashboard</a>
                     </li>
-                    <?php if ($usuario['tipo'] == 'aluno'): ?>
+                    <?php if ($usuario_logado && $usuario['tipo'] == 'aluno'): ?>
                     <li class="nav-item">
                         <a class="nav-link" href="../aluno/planos.php">Planos</a>
                     </li>
@@ -39,14 +108,14 @@ $usuario = getUsuarioInfo();
                     <li class="nav-item">
                         <a class="nav-link" href="../aluno/pagamento.php">Pagamentos</a>
                     </li>
-                    <?php elseif ($usuario['tipo'] == 'personal'): ?>
+                    <?php elseif ($usuario_logado && $usuario['tipo'] == 'personal'): ?>
                     <li class="nav-item">
                         <a class="nav-link" href="../personal/agenda.php">Minha Agenda</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="../personal/alunos.php">Meus Alunos</a>
                     </li>
-                    <?php elseif ($usuario['tipo'] == 'admin'): ?>
+                    <?php elseif ($usuario_logado && $usuario['tipo'] == 'admin'): ?>
                     <li class="nav-item">
                         <a class="nav-link" href="planos.php">Gerenciar Planos</a>
                     </li>
@@ -63,10 +132,66 @@ $usuario = getUsuarioInfo();
                 </ul>
 
                 <ul class="navbar-nav">
+                    <!-- Sistema de Notificações -->
+                    <?php if ($usuario_logado): ?>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link position-relative" href="#" role="button" data-bs-toggle="dropdown"
+                            aria-expanded="false">
+                            <i class="fas fa-bell"></i>
+                            <?php if ($total_notificacoes > 0): ?>
+                            <span
+                                class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+                                style="font-size: 0.6em;">
+                                <?php echo $total_notificacoes; ?>
+                            </span>
+                            <?php endif; ?>
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end"
+                            style="width: 350px; max-height: 400px; overflow-y: auto;">
+                            <li>
+                                <h6 class="dropdown-header">Notificações</h6>
+                            </li>
+
+                            <?php if (empty($notificacoes)): ?>
+                            <li><a class="dropdown-item text-muted" href="#">Nenhuma notificação</a></li>
+                            <?php else: ?>
+                            <?php foreach (array_slice($notificacoes, 0, 5) as $notificacao): ?>
+                            <li>
+                                <a class="dropdown-item <?php echo !$notificacao['lida'] ? 'bg-light' : ''; ?>"
+                                    href="javascript:void(0)"
+                                    onclick="marcarNotificacaoLida(<?php echo $notificacao['id']; ?>, this)">
+                                    <div class="d-flex w-100 justify-content-between">
+                                        <strong
+                                            class="mb-1"><?php echo htmlspecialchars($notificacao['titulo']); ?></strong>
+                                        <small
+                                            class="text-muted"><?php echo time_elapsed_string($notificacao['data_criacao']); ?></small>
+                                    </div>
+                                    <p class="mb-1 small text-muted">
+                                        <?php echo htmlspecialchars($notificacao['mensagem']); ?></p>
+                                    <?php if ($notificacao['tipo'] == 'cancelamento'): ?>
+                                    <small class="text-danger"><i
+                                            class="fas fa-exclamation-circle me-1"></i>Cancelamento</small>
+                                    <?php endif; ?>
+                                </a>
+                            </li>
+                            <?php endforeach; ?>
+                            <?php endif; ?>
+
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li><a class="dropdown-item text-center" href="../notificacoes.php">
+                                    <i class="fas fa-list me-1"></i>Ver todas as notificações
+                                </a></li>
+                        </ul>
+                    </li>
+                    <?php endif; ?>
+
+                    <!-- Menu do Usuário -->
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
                             <i class="fas fa-user me-1"></i>
-                            <?php echo $usuario['nome']; ?>
+                            <?php echo htmlspecialchars($usuario['nome']); ?>
                             <small class="text-muted">
                                 (<?php 
                                 if (isset($usuario['tipo'])) {
@@ -74,13 +199,14 @@ $usuario = getUsuarioInfo();
                                         case 'admin': echo 'Administrador'; break;
                                         case 'personal': echo 'Personal Trainer'; break;
                                         case 'aluno': echo 'Aluno'; break;
-                                        default: echo 'Usuário';
+                                        default: echo 'Visitante';
                                     }
                                 }
                                 ?>)
                             </small>
                         </a>
                         <ul class="dropdown-menu">
+                            <?php if ($usuario_logado): ?>
                             <li><a class="dropdown-item" href="perfil.php"><i class="fas fa-user me-2"></i>Meu
                                     Perfil</a></li>
                             <li><a class="dropdown-item" href="configuracoes.php"><i
@@ -88,10 +214,17 @@ $usuario = getUsuarioInfo();
                             <li>
                                 <hr class="dropdown-divider">
                             </li>
+                            <?php endif; ?>
                             <li>
+                                <?php if ($usuario_logado): ?>
                                 <a class="dropdown-item text-danger" href="<?php echo BASE_URL; ?>/logout.php">
                                     <i class="fas fa-sign-out-alt me-2"></i>Sair
                                 </a>
+                                <?php else: ?>
+                                <a class="dropdown-item text-success" href="<?php echo BASE_URL; ?>/login.php">
+                                    <i class="fas fa-sign-in-alt me-2"></i>Entrar
+                                </a>
+                                <?php endif; ?>
                             </li>
                         </ul>
                     </li>

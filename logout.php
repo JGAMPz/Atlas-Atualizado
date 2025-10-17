@@ -15,6 +15,6 @@ header("Pragma: no-cache");
 header("Expires: 0");
 
 // Redirecionar para o login
-header("Location: http://localhost/Atlas-Atualizado/login.php");
+header("Location: http://localhost/maluco/Atlas-Atualizado/login.php");
 exit;
 ?>
